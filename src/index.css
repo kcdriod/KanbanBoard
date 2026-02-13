@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 44 41% 95%;
+  --foreground: 24 10% 13%;
+  --card: 0 0% 100%;
+  --card-foreground: 24 10% 13%;
+  --primary: 14 72% 58%;
+  --primary-foreground: 30 60% 98%;
+  --secondary: 34 32% 90%;
+  --secondary-foreground: 28 24% 22%;
+  --muted: 36 24% 90%;
+  --muted-foreground: 20 9% 40%;
+  --accent: 24 64% 93%;
+  --accent-foreground: 24 20% 20%;
+  --destructive: 0 72% 50%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 30 20% 82%;
+  --input: 30 20% 82%;
+  --ring: 14 72% 58%;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: 24 16% 10%;
+  --foreground: 38 25% 92%;
+  --card: 24 13% 14%;
+  --card-foreground: 38 25% 92%;
+  --primary: 14 74% 59%;
+  --primary-foreground: 24 20% 9%;
+  --secondary: 24 12% 20%;
+  --secondary-foreground: 34 20% 88%;
+  --muted: 24 10% 18%;
+  --muted-foreground: 30 12% 66%;
+  --accent: 24 14% 22%;
+  --accent-foreground: 36 22% 92%;
+  --destructive: 0 64% 50%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 24 10% 26%;
+  --input: 24 10% 26%;
+  --ring: 14 74% 59%;
+}
+
+* {
+  @apply border-border;
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family: "Avenir Next", "Segoe UI Variable", "Trebuchet MS", sans-serif;
+  background-image: radial-gradient(circle at 85% -5%, rgba(236, 157, 93, 0.3), transparent 30%),
+    radial-gradient(circle at -5% 90%, rgba(91, 145, 121, 0.3), transparent 30%);
+  min-height: 100vh;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.dark body {
+  background-image: radial-gradient(circle at 85% -5%, rgba(236, 157, 93, 0.12), transparent 33%),
+    radial-gradient(circle at -5% 90%, rgba(91, 145, 121, 0.12), transparent 33%);
+}
