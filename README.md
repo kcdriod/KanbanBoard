@@ -1,49 +1,35 @@
 # KanbanBoard
 
-A lightweight, modern Kanban board for tracking projects and day-to-day tasks.
+Kanban + Notes tracker built with React, Tailwind CSS, and `shadcn/ui`.
+
+## Stack
+
+- React + Vite
+- Tailwind CSS
+- `shadcn/ui` component primitives (`Button`, `Dialog`, `Input`, `Textarea`, `Tabs`, `Card`, `Badge`)
 
 ## Features
 
+- Segmented `Kanban / Notes` toggle using shadcn tabs
+- Light/Dark mode toggle with saved preference
 - Four workflow stages: `Backlog`, `In Progress`, `Review`, `Done`
-- Create, edit, and delete tasks
+- Task create, edit, delete
 - Drag-and-drop tasks between columns
-- Task fields:
-  - Title
-  - Description
-  - Priority (`Low`, `Medium`, `High`, `Urgent`)
-  - Assignee
-  - Due date
-  - Tags
-- Search by title/description/tags/assignee
-- Priority filter
-- Per-column task counts
-- Local persistence using `localStorage`
-- Responsive layout for desktop and mobile
-
-## Project Structure
-
-```text
-.
-|- index.html
-|- styles.css
-|- app.js
-`- README.md
-```
+- Task details: title, description, priority, assignee, due date, tags
+- Search + priority filtering
+- Per-column task count
+- Notes workspace with autosave
+- Local persistence (`localStorage`) for tasks, notes, and active view
 
 ## Run Locally
 
-1. Clone the repository.
-2. Open `index.html` directly in your browser.
+```bash
+npm install
+npm run dev
+```
 
-No build tools or dependencies are required.
+Build for production:
 
-## Usage
-
-1. Click **Add Task** to create a task.
-2. Drag task cards between columns to update status.
-3. Use **Search tasks** and **Priority** filter to focus work.
-4. Click **Edit** to update a task or **Delete** to remove it.
-
-## Notes
-
-- Data is stored in your browser (`localStorage`), so tasks persist across refreshes on the same machine/browser profile.
+```bash
+npm run build
+```
