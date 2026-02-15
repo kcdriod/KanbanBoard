@@ -2,11 +2,21 @@
   "name": "kanbanboard",
   "private": true,
   "version": "1.0.0",
+  "description": "Multi-project Kanban board and notes workspace desktop app.",
+  "author": "KanbanBoard Team",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:renderer": "vite",
+    "dev:electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:desktop": "npm run build && electron-builder",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:linux": "npm run build && electron-builder --linux",
+    "preview": "vite preview",
+    "start": "electron ."
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -14,7 +24,10 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dompurify": "^3.3.1",
+    "framer-motion": "^12.34.0",
     "lucide-react": "^0.542.0",
+    "marked": "^17.0.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^3.3.1"
@@ -23,8 +36,43 @@
     "@rollup/rollup-win32-x64-msvc": "^4.57.1",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^40.4.1",
+    "electron-builder": "^26.7.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
-    "vite": "^7.1.5"
+    "vite": "^7.1.5",
+    "wait-on": "^9.0.4"
+  },
+  "build": {
+    "appId": "com.kanbanboard.desktop",
+    "productName": "KanbanBoard",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    }
   }
 }
