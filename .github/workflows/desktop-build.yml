@@ -1,31 +1,36 @@
-name: Desktop Build
+name: Desktop Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      create_release:
-        description: "Create/update a GitHub Release with built artifacts"
-        type: boolean
-        required: false
-        default: false
-      tag:
-        description: "Tag to release (required when create_release is true)"
-        type: string
-        required: false
-      prerelease:
-        description: "Mark release as prerelease"
-        type: boolean
-        required: false
-        default: false
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
+  release_please:
+    name: Create Release Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          release-type: node
+          package-name: kanbanboard
+
   build:
+    name: Build Desktop Installers
+    needs: release_please
+    if: needs.release_please.outputs.release_created == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -70,28 +75,12 @@ jobs:
           path: ${{ matrix.artifact_path }}
           if-no-files-found: error
 
-  release:
-    name: Publish GitHub Release
-    needs: build
+  publish-assets:
+    name: Publish Installers to Release
+    needs: [release_please, build]
+    if: needs.release_please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
-    if: |
-      startsWith(github.ref, 'refs/tags/v') ||
-      (github.event_name == 'workflow_dispatch' && inputs.create_release)
-
     steps:
-      - name: Resolve tag
-        id: meta
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-          elif [[ -n "${{ inputs.tag }}" ]]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "Manual release requires 'tag' input." >&2
-            exit 1
-          fi
-
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -101,14 +90,18 @@ jobs:
 
       - name: Show release assets
         shell: bash
-        run: |
-          ls -la release-assets
+        run: ls -la release-assets
 
-      - name: Create or update release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          generate_release_notes: true
-          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
-          files: |
-            release-assets/**
+      - name: Upload assets to GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.release_please.outputs.tag_name }}
+        run: |
+          shopt -s globstar nullglob
+          files=(release-assets/**)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No release assets found." >&2
+            exit 1
+          fi
+          gh release upload "$TAG_NAME" "${files[@]}" --clobber

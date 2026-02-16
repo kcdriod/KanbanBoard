@@ -71,13 +71,21 @@ Build targets:
 
 Runs on:
 
+- Push to `main`
 - Manual trigger
-- Tag push matching `v*`
 
 Release behavior:
 
-- Tag push (example: `v1.0.0`) builds macOS + Windows installers and publishes/updates a GitHub Release for that tag.
-- Manual trigger can optionally publish a release by enabling `create_release` and providing `tag`.
+- `release-please` handles auto versioning and changelog generation.
+- On normal pushes, it opens/updates a Release PR.
+- When that Release PR is merged, it creates a GitHub Release + tag.
+- Then this workflow builds Windows/macOS installers and uploads them to that Release page for public download.
+
+Version bump rules (Conventional Commits):
+
+- `fix:` => patch
+- `feat:` => minor
+- `!` or `BREAKING CHANGE:` => major
 
 ## Future Android / iOS
 
@@ -96,3 +104,4 @@ Details:
 
 - `docs/PACKAGING_AND_MOBILE.md`
 - `docs/CROSS_PLATFORM_REARCHITECTURE.md`
+- `docs/GITHUB_RELEASE_INSTRUCTIONS.md`
