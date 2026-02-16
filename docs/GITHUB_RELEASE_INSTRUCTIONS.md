@@ -95,6 +95,13 @@ How to run build anyway:
 2. Set `force_build = true`.
 3. (Optional) set `publish_to_release = true` and provide `release_tag`.
 
+### E) `gh release upload` failed with `not a git repository`
+Cause:
+- Publish job did not have a checked out repo and `gh` could not infer repository context.
+
+Fix in workflow:
+- pass repository explicitly: `--repo "$GITHUB_REPOSITORY"` (already configured).
+
 ## 7. Recommended next step (optional)
 
 For production-grade public distribution, add signing:
