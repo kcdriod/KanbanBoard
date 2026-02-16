@@ -102,6 +102,15 @@ Cause:
 Fix in workflow:
 - pass repository explicitly: `--repo "$GITHUB_REPOSITORY"` (already configured).
 
+### F) `gh release upload` failed with `release not found`
+Cause:
+- target tag resolved, but GitHub release object did not exist yet.
+
+Fix in workflow:
+1. resolve tag explicitly before upload.
+2. check/retry release lookup.
+3. create release if it still does not exist, then upload assets.
+
 ## 7. Recommended next step (optional)
 
 For production-grade public distribution, add signing:

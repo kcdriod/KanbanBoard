@@ -99,6 +99,23 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.publish_to_release && inputs.release_tag != '')
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve target release tag
+        id: resolve_tag
+        shell: bash
+        env:
+          RELEASE_CREATED: ${{ needs.release_please.outputs.release_created }}
+          RELEASE_PLEASE_TAG: ${{ needs.release_please.outputs.tag_name }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [[ "$RELEASE_CREATED" == "true" && -n "$RELEASE_PLEASE_TAG" ]]; then
+            echo "tag=$RELEASE_PLEASE_TAG" >> "$GITHUB_OUTPUT"
+          elif [[ -n "$INPUT_RELEASE_TAG" ]]; then
+            echo "tag=$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "Could not resolve release tag." >&2
+            exit 1
+          fi
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -110,11 +127,32 @@ jobs:
         shell: bash
         run: ls -la release-assets
 
+      - name: Ensure release exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ steps.resolve_tag.outputs.tag }}
+        run: |
+          found=false
+          for i in {1..6}; do
+            if gh release view "$TAG_NAME" --repo "$GH_REPO" >/dev/null 2>&1; then
+              found=true
+              break
+            fi
+            sleep 5
+          done
+
+          if [[ "$found" == "false" ]]; then
+            echo "Release $TAG_NAME not found, creating it."
+            gh release create "$TAG_NAME" --repo "$GH_REPO" --title "$TAG_NAME" --generate-notes
+          fi
+
       - name: Upload assets to GitHub release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.release_please.outputs.tag_name || inputs.release_tag }}
+          TAG_NAME: ${{ steps.resolve_tag.outputs.tag }}
           GH_REPO: ${{ github.repository }}
         run: |
           mapfile -t files < <(find release-assets -maxdepth 1 -type f -print)
