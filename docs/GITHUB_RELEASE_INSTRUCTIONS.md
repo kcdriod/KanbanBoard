@@ -49,8 +49,10 @@ git commit -m "feat!: migrate board schema to sections v2"
 
 You can run the workflow manually from **Actions -> Desktop Release -> Run workflow**.
 
-Note:
-- Manual run does not force a release unless `release-please` determines one should be created.
+Inputs:
+- `force_build` (default: `true`): build installers even if no new release is created.
+- `publish_to_release` (default: `false`): upload built assets to an existing release.
+- `release_tag`: required when `publish_to_release` is `true` (example: `v1.2.3`).
 
 ## 5. One-time repository checks
 
@@ -83,6 +85,15 @@ Checks:
 1. Confirm `build` job succeeded for both matrix targets.
 2. Confirm `publish-assets` job ran.
 3. Verify release artifacts exist in `release-assets/**` in workflow logs.
+
+### D) `Build Desktop Installers` job was skipped
+Cause:
+- No release was created by `release-please` in that run.
+
+How to run build anyway:
+1. Start workflow manually.
+2. Set `force_build = true`.
+3. (Optional) set `publish_to_release = true` and provide `release_tag`.
 
 ## 7. Recommended next step (optional)
 
