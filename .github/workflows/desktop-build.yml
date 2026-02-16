@@ -5,6 +5,21 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      force_build:
+        description: "Build desktop installers even if no release is created"
+        type: boolean
+        required: false
+        default: true
+      publish_to_release:
+        description: "Upload built installers to a GitHub release"
+        type: boolean
+        required: false
+        default: false
+      release_tag:
+        description: "Existing tag to upload assets to (required when publish_to_release is true)"
+        type: string
+        required: false
 
 permissions:
   contents: write
@@ -30,7 +45,9 @@ jobs:
   build:
     name: Build Desktop Installers
     needs: release_please
-    if: needs.release_please.outputs.release_created == 'true'
+    if: |
+      needs.release_please.outputs.release_created == 'true' ||
+      (github.event_name == 'workflow_dispatch' && inputs.force_build)
     strategy:
       fail-fast: false
       matrix:
@@ -78,7 +95,9 @@ jobs:
   publish-assets:
     name: Publish Installers to Release
     needs: [release_please, build]
-    if: needs.release_please.outputs.release_created == 'true'
+    if: |
+      needs.release_please.outputs.release_created == 'true' ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_to_release && inputs.release_tag != '')
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifacts
@@ -96,7 +115,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.release_please.outputs.tag_name }}
+          TAG_NAME: ${{ needs.release_please.outputs.tag_name || inputs.release_tag }}
         run: |
           shopt -s globstar nullglob
           files=(release-assets/**)

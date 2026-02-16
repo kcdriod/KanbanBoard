@@ -80,6 +80,7 @@ Release behavior:
 - On normal pushes, it opens/updates a Release PR.
 - When that Release PR is merged, it creates a GitHub Release + tag.
 - Then this workflow builds Windows/macOS installers and uploads them to that Release page for public download.
+- If a run shows "Build Desktop Installers: skipped", no new release was created in that run. Use manual run with `force_build=true` to build anyway.
 
 Version bump rules (Conventional Commits):
 
