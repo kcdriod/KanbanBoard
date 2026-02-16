@@ -1,0 +1,27 @@
+<svg width="960" height="320" viewBox="0 0 960 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="lf-bg" x1="40" y1="40" x2="280" y2="280" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EE8B4A"/>
+      <stop offset="1" stop-color="#58A88A"/>
+    </linearGradient>
+    <linearGradient id="lf-card" x1="86" y1="74" x2="214" y2="234" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF7EF" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.88"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="40" y="40" width="240" height="240" rx="56" fill="url(#lf-bg)"/>
+  <rect x="86" y="74" width="44" height="172" rx="14" fill="url(#lf-card)"/>
+  <rect x="138" y="98" width="44" height="148" rx="14" fill="url(#lf-card)"/>
+  <rect x="190" y="124" width="44" height="122" rx="14" fill="url(#lf-card)"/>
+
+  <rect x="96" y="90" width="24" height="8" rx="4" fill="#E67834" fill-opacity="0.85"/>
+  <rect x="96" y="106" width="24" height="8" rx="4" fill="#66B89A" fill-opacity="0.85"/>
+  <rect x="148" y="114" width="24" height="8" rx="4" fill="#E67834" fill-opacity="0.85"/>
+  <rect x="148" y="130" width="24" height="8" rx="4" fill="#66B89A" fill-opacity="0.85"/>
+  <rect x="200" y="140" width="24" height="8" rx="4" fill="#E67834" fill-opacity="0.85"/>
+  <rect x="200" y="156" width="24" height="8" rx="4" fill="#66B89A" fill-opacity="0.85"/>
+
+  <text x="332" y="162" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="88" font-weight="700" fill="#2F2A25">LifeFlow</text>
+  <text x="336" y="208" font-family="'Avenir Next', 'Segoe UI', sans-serif" font-size="34" font-weight="500" fill="#6D5E53" letter-spacing="0.08em">PLANNER</text>
+</svg>
