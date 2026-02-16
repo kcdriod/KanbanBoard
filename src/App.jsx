@@ -1,13 +1,11 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import DOMPurify from "dompurify";
 import {
   Bold,
   Code2,
-  Columns2,
   Copy,
-  Download,
-  Eye,
+  PanelLeft,
+  GripVertical,
   FilePlus2,
   Heading1,
   KanbanSquare,
@@ -16,7 +14,6 @@ import {
   ListOrdered,
   Pin,
   PinOff,
-  PencilLine,
   NotebookPen,
   Plus,
   Quote,
@@ -28,9 +25,8 @@ import {
   Trash2,
   Moon,
   Sun,
-  Upload
+  ExternalLink
 } from "lucide-react";
-import { marked } from "marked";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,12 +49,13 @@ const WORKSPACE_STORAGE_KEY = "kanban.workspace.v1";
 const VIEW_STORAGE_KEY = "kanban.view.v1";
 const THEME_STORAGE_KEY = "kanban.theme.v1";
 
-const STATUSES = [
+const DEFAULT_SECTIONS = [
   { id: "backlog", label: "Backlog" },
   { id: "in-progress", label: "In Progress" },
   { id: "review", label: "Review" },
   { id: "done", label: "Done" }
 ];
+const DEFAULT_STATUS_ID = DEFAULT_SECTIONS[0].id;
 
 const priorityClass = {
   low: "bg-emerald-700/90 text-white border-emerald-800",
@@ -68,16 +65,17 @@ const priorityClass = {
 };
 
 const TASK_CARD_TYPE_OPTIONS = [
-  { id: "classic", label: "Classic" },
-  { id: "focus", label: "Focus" },
-  { id: "progress", label: "Progress" },
-  { id: "checklist", label: "Checklist" }
+  { id: "basic", label: "Basic" },
+  { id: "checklist", label: "Checklist" },
+  { id: "deadline", label: "Deadline" },
+  { id: "recurring", label: "Recurring" },
+  { id: "priority", label: "Priority Matrix" }
 ];
 
 const STATUS_CARD_TYPE = {
-  backlog: "focus",
-  "in-progress": "progress",
-  review: "classic",
+  backlog: "priority",
+  "in-progress": "deadline",
+  review: "checklist",
   done: "checklist"
 };
 
@@ -88,34 +86,166 @@ const STATUS_PROGRESS = {
   done: 100
 };
 
-const MotionCard = motion(Card);
+const MotionCard = motion.create(Card);
 const easeOut = [0.22, 1, 0.36, 1];
 const springLayout = { type: "spring", stiffness: 500, damping: 36, mass: 0.7 };
 
-marked.setOptions({
-  gfm: true,
-  breaks: true
-});
-
-const blankForm = {
-  title: "",
-  description: "",
-  priority: "medium",
-  status: "backlog",
-  cardType: "classic",
-  focusObjective: "",
-  focusBlocker: "",
-  progressValue: "55",
-  progressMilestone: "",
-  checklistText: "",
-  assignee: "",
-  dueDate: "",
-  tags: ""
-};
+function createBlankForm(status = DEFAULT_STATUS_ID) {
+  return {
+    title: "",
+    description: "",
+    priority: "medium",
+    status,
+    cardType: "basic",
+    checklistText: "",
+    deadlineNote: "",
+    recurrenceRule: "weekly",
+    matrixAction: "do",
+    assignee: "",
+    dueDate: "",
+    tags: ""
+  };
+}
 
 const blankProjectForm = {
   name: "",
-  description: ""
+  description: "",
+  type: "personal",
+  useTemplate: true
+};
+
+const PROJECT_TYPE_OPTIONS = [
+  { id: "personal", label: "Personal" },
+  { id: "home", label: "Home" },
+  { id: "work", label: "Work" },
+  { id: "learning", label: "Learning" },
+  { id: "custom", label: "Custom" }
+];
+
+const RESOURCE_KIND_LABEL = {
+  youtube: "YouTube",
+  material: "Material",
+  link: "Link"
+};
+
+const PROJECT_TEMPLATES = {
+  personal: {
+    description: "Personal goals, routines, appointments, and errands.",
+    tasks: [
+      {
+        title: "Book a haircut appointment",
+        description: "Find a nearby salon and reserve a convenient time slot.",
+        status: "backlog",
+        priority: "medium",
+        cardType: "checklist",
+        tags: ["self-care", "appointment"]
+      },
+      {
+        title: "Weekly fitness plan",
+        description: "Plan 3 sessions and prepare gear in advance.",
+        status: "in-progress",
+        priority: "medium",
+        cardType: "recurring",
+        tags: ["health", "routine"]
+      }
+    ],
+    noteContent:
+      "# Personal Planner\n\n## This week\n- Appointments\n- Priorities\n- Follow-ups\n\n## Notes\n- Keep quick reminders here.\n",
+    resources: []
+  },
+  home: {
+    description: "Home projects, repairs, purchases, and maintenance.",
+    tasks: [
+      {
+        title: "Kitchen shelf repair",
+        description: "Measure, buy brackets, and schedule installation.",
+        status: "backlog",
+        priority: "high",
+        cardType: "deadline",
+        tags: ["repair", "home"]
+      },
+      {
+        title: "Organize storage materials",
+        description: "Sort tools, labels, and unused items.",
+        status: "review",
+        priority: "low",
+        cardType: "basic",
+        tags: ["storage", "materials"]
+      }
+    ],
+    noteContent:
+      "# Home Plan\n\n## Ongoing\n- Maintenance schedule\n- Materials to buy\n\n## Budget\n- Keep cost notes and receipts.\n",
+    resources: [
+      {
+        title: "Home Depot Materials List",
+        url: "https://www.homedepot.com/",
+        kind: "material",
+        description: "Quick access for supplies and prices."
+      }
+    ]
+  },
+  work: {
+    description: "Projects, deadlines, and team deliverables.",
+    tasks: [
+      {
+        title: "Define monthly goals",
+        description: "Set priority outcomes and owners.",
+        status: "backlog",
+        priority: "high",
+        cardType: "priority",
+        tags: ["planning", "goals"]
+      },
+      {
+        title: "Share weekly status update",
+        description: "Publish highlights, blockers, and next actions.",
+        status: "in-progress",
+        priority: "medium",
+        cardType: "recurring",
+        tags: ["team", "update"]
+      }
+    ],
+    noteContent:
+      "# Work Planner\n\n## Priorities\n- Top outcomes this week\n\n## Risks\n- Dependencies and blockers\n",
+    resources: []
+  },
+  learning: {
+    description: "Courses, tutorials, references, and practice tasks.",
+    tasks: [
+      {
+        title: "Watch one tutorial and take notes",
+        description: "Capture key ideas and next practice step.",
+        status: "backlog",
+        priority: "medium",
+        cardType: "checklist",
+        tags: ["tutorial", "study"]
+      },
+      {
+        title: "Practice project checkpoint",
+        description: "Build a small milestone based on what you learned.",
+        status: "in-progress",
+        priority: "high",
+        cardType: "deadline",
+        tags: ["practice", "project"]
+      }
+    ],
+    noteContent:
+      "# Learning Hub\n\n## Topics\n- Concepts to review\n- Practice goals\n\n## Reflection\n- What worked and what to revisit.\n",
+    resources: [
+      {
+        title: "YouTube Learning Playlist",
+        url: "https://www.youtube.com/",
+        kind: "youtube",
+        description: "Save tutorials and walkthroughs."
+      }
+    ]
+  },
+  custom: {
+    description: "",
+    tasks: [],
+    noteContent:
+      "# Plan Notes\n\n## Highlights\n- Keep important updates here\n\n## Next Steps\n- [ ] Add your first actions\n",
+    resources: []
+  }
 };
 
 function createNote(overrides = {}) {
@@ -125,6 +255,7 @@ function createNote(overrides = {}) {
     title: "Untitled note",
     content: "",
     tags: [],
+    linkPreviews: [],
     pinned: false,
     createdAt: now,
     updatedAt: now,
@@ -132,11 +263,11 @@ function createNote(overrides = {}) {
   };
 }
 
-function buildInitialNotesState(projectName = "Project") {
+function buildInitialNotesState(projectName = "Plan") {
   const starter = createNote({
     title: `${projectName} Notes`,
     content:
-      `# ${projectName} Notes\n\n## Highlights\n- Keep roadmap updates here\n- Track blockers and decisions\n\n## Next Actions\n- [ ] Add sprint goals\n- [ ] Add meeting notes\n`
+      `# ${projectName} Notes\n\n## Highlights\n- Capture updates and ideas\n- Track blockers and decisions\n\n## Next Actions\n- [ ] Add top priorities\n- [ ] Add follow-up notes\n`
   });
 
   return {
@@ -145,75 +276,238 @@ function buildInitialNotesState(projectName = "Project") {
   };
 }
 
+function resolveProjectType(value) {
+  return PROJECT_TYPE_OPTIONS.some((option) => option.id === value) ? value : "custom";
+}
+
+function normalizeSections(source) {
+  const fallback = DEFAULT_SECTIONS.map((section) => ({ ...section }));
+  if (!Array.isArray(source)) return fallback;
+
+  const seen = new Set();
+  const sections = source
+    .filter(Boolean)
+    .map((section, index) => {
+      const rawId = typeof section?.id === "string" ? section.id.trim() : "";
+      const rawLabel = typeof section?.label === "string" ? section.label.trim() : "";
+      const id = rawId || `section-${index + 1}`;
+      const label = rawLabel || `Section ${index + 1}`;
+      if (!id || seen.has(id)) return null;
+      seen.add(id);
+      return { id, label };
+    })
+    .filter(Boolean);
+
+  return sections.length > 0 ? sections : fallback;
+}
+
+function createSectionId(label, existingIds = []) {
+  const base =
+    String(label || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "section";
+  const used = new Set(existingIds);
+  let nextId = base;
+  let counter = 2;
+
+  while (used.has(nextId)) {
+    nextId = `${base}-${counter}`;
+    counter += 1;
+  }
+
+  return nextId;
+}
+
+function detectResourceKind(url) {
+  const normalized = String(url || "").toLowerCase();
+  if (normalized.includes("youtube.com") || normalized.includes("youtu.be")) return "youtube";
+  if (
+    normalized.includes("drive.google.com") ||
+    normalized.includes("dropbox.com") ||
+    normalized.includes("docs.google.com") ||
+    normalized.includes("notion.so")
+  ) {
+    return "material";
+  }
+  return "link";
+}
+
+function extractYouTubeVideoId(url) {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") return parsed.pathname.slice(1);
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      if (parsed.pathname === "/watch") return parsed.searchParams.get("v") || "";
+      const match = parsed.pathname.match(/^\/(embed|shorts)\/([^/?#]+)/);
+      return match?.[2] || "";
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function fallbackThumbnailForUrl(url, kind) {
+  if (!url) return "";
+  if (kind === "youtube") {
+    const videoId = extractYouTubeVideoId(url);
+    if (videoId) return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  }
+  return `https://image.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&embed=screenshot.url`;
+}
+
+async function resolveResourceMetadata(url, explicitKind = "auto") {
+  const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  const detectedKind = explicitKind === "auto" ? detectResourceKind(normalizedUrl) : explicitKind;
+  const fallbackThumb = fallbackThumbnailForUrl(normalizedUrl, detectedKind);
+
+  if (detectedKind === "youtube") {
+    const videoId = extractYouTubeVideoId(normalizedUrl);
+    return {
+      kind: "youtube",
+      thumbnail: videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : fallbackThumb,
+      title: "",
+      description: ""
+    };
+  }
+
+  try {
+    const response = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(normalizedUrl)}`);
+    const payload = await response.json();
+    const data = payload?.data || {};
+    return {
+      kind: detectedKind,
+      thumbnail: data?.image?.url || data?.logo?.url || fallbackThumb,
+      title: typeof data?.title === "string" ? data.title : "",
+      description: typeof data?.description === "string" ? data.description : ""
+    };
+  } catch {
+    return {
+      kind: detectedKind,
+      thumbnail: fallbackThumb,
+      title: "",
+      description: ""
+    };
+  }
+}
+
+function normalizeResource(resource, index = 0) {
+  const rawUrl = typeof resource?.url === "string" ? resource.url.trim() : "";
+  const url =
+    rawUrl && !/^https?:\/\//i.test(rawUrl)
+      ? `https://${rawUrl}`
+      : rawUrl;
+  const detectedKind = detectResourceKind(url);
+  const kind = ["youtube", "material", "link"].includes(resource?.kind) ? resource.kind : detectedKind;
+
+  return {
+    id: typeof resource?.id === "string" && resource.id ? resource.id : crypto.randomUUID(),
+    title:
+      typeof resource?.title === "string" && resource.title.trim()
+        ? resource.title.trim()
+        : `Resource ${index + 1}`,
+    url,
+    kind,
+    thumbnail:
+      typeof resource?.thumbnail === "string" && resource.thumbnail.trim()
+        ? resource.thumbnail.trim()
+        : fallbackThumbnailForUrl(url, kind),
+    description: typeof resource?.description === "string" ? resource.description : "",
+    createdAt: Number.isFinite(resource?.createdAt) ? resource.createdAt : Date.now() - index
+  };
+}
+
+function normalizeResources(source) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .filter(Boolean)
+    .map((resource, index) => normalizeResource(resource, index))
+    .filter((resource) => resource.url);
+}
+
+function getTemplateForProjectType(type) {
+  return PROJECT_TEMPLATES[resolveProjectType(type)] ?? PROJECT_TEMPLATES.custom;
+}
+
+function createStarterNoteState(name, type) {
+  const template = getTemplateForProjectType(type);
+  const starter = createNote({
+    title: `${name} Notes`,
+    content: template.noteContent || `# ${name}\n\nStart writing your notes here.\n`
+  });
+  return { notes: [starter], activeNoteId: starter.id };
+}
+
 function seedTasks() {
   const now = Date.now();
   return [
     {
       id: crypto.randomUUID(),
-      title: "Define project scope",
-      description: "Capture business goals, constraints, and MVP boundaries.",
+      title: "Book haircut appointment",
+      description: "Shortlist nearby salons and reserve a time.",
       status: "backlog",
-      priority: "high",
-      cardType: "focus",
+      priority: "medium",
+      cardType: "checklist",
       cardMeta: {
-        focusObjective: "Define MVP scope for redesign",
-        focusBlocker: "Need stakeholder approval on feature cuts",
-        progressValue: 24,
-        progressMilestone: "Discovery complete",
+        deadlineNote: "",
+        recurrenceRule: "weekly",
+        matrixAction: "do",
         checklistItems: [
-          { id: crypto.randomUUID(), label: "Align goals", done: true },
-          { id: crypto.randomUUID(), label: "Define non-goals", done: false }
+          { id: crypto.randomUUID(), label: "Check availability", done: true },
+          { id: crypto.randomUUID(), label: "Confirm appointment time", done: false }
         ]
       },
-      assignee: "Product Team",
+      assignee: "",
       dueDate: "",
-      tags: ["planning", "mvp"],
+      tags: ["personal", "appointment"],
       createdAt: now - 10000
     },
     {
       id: crypto.randomUUID(),
-      title: "Design board wireframes",
-      description: "Prepare desktop and mobile layout plus interactions.",
+      title: "Plan home shelf repair",
+      description: "Measure wall space and buy required materials.",
       status: "in-progress",
-      priority: "medium",
-      cardType: "progress",
+      priority: "high",
+      cardType: "deadline",
       cardMeta: {
-        focusObjective: "Prepare production-ready wireframes",
-        focusBlocker: "",
-        progressValue: 64,
-        progressMilestone: "Desktop flow approved",
+        deadlineNote: "Weekend target",
+        recurrenceRule: "none",
+        matrixAction: "schedule",
         checklistItems: [
-          { id: crypto.randomUUID(), label: "Desktop", done: true },
-          { id: crypto.randomUUID(), label: "Tablet", done: false },
-          { id: crypto.randomUUID(), label: "Mobile", done: false }
+          { id: crypto.randomUUID(), label: "Measure wall", done: true },
+          { id: crypto.randomUUID(), label: "Buy materials", done: false },
+          { id: crypto.randomUUID(), label: "Install shelf", done: false }
         ]
       },
-      assignee: "Design",
+      assignee: "",
       dueDate: "",
-      tags: ["ux", "ui"],
+      tags: ["home", "repair"],
       createdAt: now - 9000
     },
     {
       id: crypto.randomUUID(),
-      title: "Review API integration",
-      description: "Validate endpoints and failure handling before release.",
+      title: "Save tutorial resources",
+      description: "Collect useful videos and notes for learning.",
       status: "review",
-      priority: "urgent",
-      cardType: "checklist",
+      priority: "medium",
+      cardType: "priority",
       cardMeta: {
-        focusObjective: "Sign off API quality checks",
-        focusBlocker: "Pending QA retest for edge cases",
-        progressValue: 82,
-        progressMilestone: "Final pass in review",
+        deadlineNote: "",
+        recurrenceRule: "weekly",
+        matrixAction: "do",
         checklistItems: [
-          { id: crypto.randomUUID(), label: "Regression tests", done: true },
-          { id: crypto.randomUUID(), label: "Error paths", done: true },
-          { id: crypto.randomUUID(), label: "Stakeholder sign-off", done: false }
+          { id: crypto.randomUUID(), label: "YouTube tutorial", done: true },
+          { id: crypto.randomUUID(), label: "Material checklist", done: true },
+          { id: crypto.randomUUID(), label: "Practice notes", done: false }
         ]
       },
-      assignee: "Backend",
+      assignee: "",
       dueDate: "",
-      tags: ["api", "qa"],
+      tags: ["learning", "tutorial"],
       createdAt: now - 8000
     }
   ];
@@ -262,7 +556,6 @@ function checklistTextFromItems(items = []) {
 }
 
 function normalizeCardMeta(source, status, tags = []) {
-  const fallbackProgress = STATUS_PROGRESS[status] ?? 0;
   const rawItems = Array.isArray(source?.checklistItems)
     ? source.checklistItems
     : parseChecklistText(typeof source?.checklistText === "string" ? source.checklistText : "");
@@ -285,26 +578,36 @@ function normalizeCardMeta(source, status, tags = []) {
           .filter(Boolean)
       : tags.slice(0, 3).map((tag) => ({ id: crypto.randomUUID(), label: tag, done: false }));
 
+  const matrixAction = ["do", "schedule", "delegate", "drop"].includes(source?.matrixAction)
+    ? source.matrixAction
+    : "do";
+  const recurrenceRule = ["none", "daily", "weekly", "monthly"].includes(source?.recurrenceRule)
+    ? source.recurrenceRule
+    : "none";
+
   return {
-    focusObjective: typeof source?.focusObjective === "string" ? source.focusObjective : "",
-    focusBlocker: typeof source?.focusBlocker === "string" ? source.focusBlocker : "",
-    progressValue: clampProgress(source?.progressValue, fallbackProgress),
-    progressMilestone: typeof source?.progressMilestone === "string" ? source.progressMilestone : "",
+    deadlineNote:
+      typeof source?.deadlineNote === "string"
+        ? source.deadlineNote
+        : typeof source?.progressMilestone === "string"
+          ? source.progressMilestone
+          : "",
+    recurrenceRule,
+    matrixAction,
     checklistItems
   };
 }
 
-function normalizeTask(task, index) {
-  const fallbackStatus = "backlog";
+function normalizeTask(task, index, sectionIds = [], fallbackStatus = DEFAULT_STATUS_ID) {
   const fallbackPriority = "medium";
   const now = Date.now();
-  const normalizedStatus = STATUSES.some((status) => status.id === task?.status) ? task.status : fallbackStatus;
+  const normalizedStatus = sectionIds.includes(task?.status) ? task.status : fallbackStatus;
   const tags = Array.isArray(task?.tags) ? task.tags.map((tag) => String(tag).trim()).filter(Boolean) : [];
 
   return {
     id: typeof task?.id === "string" && task.id ? task.id : crypto.randomUUID(),
     title:
-      typeof task?.title === "string" && task.title.trim() ? task.title.trim() : `Task ${index + 1}`,
+      typeof task?.title === "string" && task.title.trim() ? task.title.trim() : `Item ${index + 1}`,
     description: typeof task?.description === "string" ? task.description : "",
     status: normalizedStatus,
     priority: Object.hasOwn(priorityClass, task?.priority) ? task.priority : fallbackPriority,
@@ -317,12 +620,17 @@ function normalizeTask(task, index) {
   };
 }
 
-function normalizeTasks(source, fallback = []) {
+function normalizeTasks(source, fallback = [], sections = DEFAULT_SECTIONS) {
   if (!Array.isArray(source)) return fallback;
-  return source.filter(Boolean).map((task, index) => normalizeTask(task, index));
+  const normalizedSections = normalizeSections(sections);
+  const sectionIds = normalizedSections.map((section) => section.id);
+  const fallbackStatus = sectionIds[0] || DEFAULT_STATUS_ID;
+  return source
+    .filter(Boolean)
+    .map((task, index) => normalizeTask(task, index, sectionIds, fallbackStatus));
 }
 
-function normalizeNotesState(source, projectName = "Project") {
+function normalizeNotesState(source, projectName = "Plan") {
   const fallback = buildInitialNotesState(projectName);
 
   if (source == null) return fallback;
@@ -344,6 +652,7 @@ function normalizeNotesState(source, projectName = "Project") {
             typeof note?.title === "string" && note.title.trim() ? note.title.trim() : `Note ${index + 1}`,
           content: typeof note?.content === "string" ? note.content : "",
           tags: Array.isArray(note?.tags) ? note.tags.map((tag) => String(tag).trim()).filter(Boolean) : [],
+          linkPreviews: normalizeResources(note?.linkPreviews ?? note?.resources ?? []),
           pinned: Boolean(note?.pinned),
           createdAt: Number.isFinite(note?.createdAt) ? note.createdAt : Date.now() - index,
           updatedAt: Number.isFinite(note?.updatedAt) ? note.updatedAt : Date.now() - index
@@ -363,6 +672,7 @@ function normalizeNotesState(source, projectName = "Project") {
             typeof note?.title === "string" && note.title.trim() ? note.title.trim() : `Note ${index + 1}`,
           content: typeof note?.content === "string" ? note.content : "",
           tags: Array.isArray(note?.tags) ? note.tags.map((tag) => String(tag).trim()).filter(Boolean) : [],
+          linkPreviews: normalizeResources(note?.linkPreviews ?? note?.resources ?? []),
           pinned: Boolean(note?.pinned),
           createdAt: Number.isFinite(note?.createdAt) ? note.createdAt : Date.now() - index,
           updatedAt: Number.isFinite(note?.updatedAt) ? note.updatedAt : Date.now() - index
@@ -383,15 +693,20 @@ function normalizeNotesState(source, projectName = "Project") {
 
 function createProject(overrides = {}) {
   const now = Date.now();
-  const name = typeof overrides.name === "string" && overrides.name.trim() ? overrides.name.trim() : "Untitled Project";
+  const name = typeof overrides.name === "string" && overrides.name.trim() ? overrides.name.trim() : "Untitled Plan";
   const description = typeof overrides.description === "string" ? overrides.description : "";
+  const type = resolveProjectType(overrides.type);
+  const sections = normalizeSections(overrides.sections);
 
   return {
     id: typeof overrides.id === "string" && overrides.id ? overrides.id : crypto.randomUUID(),
     name,
     description,
-    tasks: normalizeTasks(overrides.tasks),
+    type,
+    sections,
+    tasks: normalizeTasks(overrides.tasks, [], sections),
     notesState: normalizeNotesState(overrides.notesState, name),
+    resources: normalizeResources(overrides.resources),
     createdAt: Number.isFinite(overrides.createdAt) ? overrides.createdAt : now,
     updatedAt: Number.isFinite(overrides.updatedAt) ? overrides.updatedAt : now
   };
@@ -399,7 +714,7 @@ function createProject(overrides = {}) {
 
 function buildFallbackWorkspace() {
   let legacyTasks = seedTasks();
-  let legacyNotesState = buildInitialNotesState("Main Project");
+  let legacyNotesState = buildInitialNotesState("My Planner");
   try {
     const rawTasks = localStorage.getItem(TASKS_STORAGE_KEY);
     if (rawTasks) {
@@ -414,17 +729,19 @@ function buildFallbackWorkspace() {
     const rawNotes = localStorage.getItem(NOTES_STORAGE_KEY);
     if (rawNotes) {
       const parsedNotes = JSON.parse(rawNotes);
-      legacyNotesState = normalizeNotesState(parsedNotes, "Main Project");
+      legacyNotesState = normalizeNotesState(parsedNotes, "My Planner");
     }
   } catch {
-    legacyNotesState = buildInitialNotesState("Main Project");
+    legacyNotesState = buildInitialNotesState("My Planner");
   }
 
   const legacyProject = createProject({
-    name: "Main Project",
+    name: "My Planner",
+    type: "custom",
     description: "Migrated from your existing board.",
     tasks: legacyTasks,
-    notesState: legacyNotesState
+    notesState: legacyNotesState,
+    resources: []
   });
 
   return {
@@ -468,7 +785,8 @@ function loadWorkspace() {
 
 function loadView() {
   const value = localStorage.getItem(VIEW_STORAGE_KEY);
-  return value === "notes" ? "notes" : "board";
+  if (value === "notes") return value;
+  return "board";
 }
 
 function loadTheme() {
@@ -503,27 +821,30 @@ function estimateReadingTime(wordCount) {
   return `${minutes} min read`;
 }
 
-function fileNameFromTitle(title) {
-  const safeTitle = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-  return safeTitle || "note";
+function extractUrlsFromText(text) {
+  if (!text) return [];
+  const matches = text.match(/https?:\/\/[^\s)]+/g) || [];
+  return [...new Set(matches.map((url) => url.trim().replace(/[.,;!?]+$/, "")))];
 }
 
 const TaskItem = memo(function TaskItem({
   task,
   index,
   isDragging,
+  sections,
+  completedStatusId,
   onEdit,
   onDelete,
+  onMove,
   onDragStart,
   onDragEnd
 }) {
   const delay = Math.min(index * 0.03, 0.15);
   const cardTypeLabel =
-    TASK_CARD_TYPE_OPTIONS.find((option) => option.id === task.cardType)?.label ?? "Classic";
-  const focusObjective = task.cardMeta.focusObjective || "Define a clear outcome for this task.";
-  const focusBlocker = task.cardMeta.focusBlocker || "No blocker specified.";
-  const progressValue = clampProgress(task.cardMeta.progressValue, STATUS_PROGRESS[task.status] ?? 0);
-  const progressMilestone = task.cardMeta.progressMilestone || "Milestone not set";
+    TASK_CARD_TYPE_OPTIONS.find((option) => option.id === task.cardType)?.label ?? "Basic";
+  const deadlineNote = task.cardMeta.deadlineNote || "No extra deadline note.";
+  const recurrenceRule = task.cardMeta.recurrenceRule || "none";
+  const matrixAction = task.cardMeta.matrixAction || "do";
   const checklistItems =
     task.cardMeta.checklistItems.length > 0
       ? task.cardMeta.checklistItems
@@ -532,11 +853,15 @@ const TaskItem = memo(function TaskItem({
           { id: `${task.id}-build`, label: "Build", done: false },
           { id: `${task.id}-review`, label: "Review", done: false }
         ];
+  const doneCount = checklistItems.filter((item) => task.status === completedStatusId || item.done).length;
+  const checklistPercent = checklistItems.length > 0 ? Math.round((doneCount / checklistItems.length) * 100) : 0;
+  const checklistVisibleItems = checklistItems.slice(0, 4);
 
   const cardTypeClass = {
-    classic: "task-card-classic",
-    focus: "task-card-focus",
-    progress: "task-card-progress",
+    basic: "task-card-classic",
+    deadline: "task-card-progress",
+    recurring: "task-card-focus",
+    priority: "task-card-checklist",
     checklist: "task-card-checklist"
   };
 
@@ -583,38 +908,54 @@ const TaskItem = memo(function TaskItem({
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {task.cardType === "focus" && (
+        {task.cardType === "deadline" && (
           <div className="space-y-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-2 text-[11px]">
-            <p className="font-semibold text-primary">Outcome: {focusObjective}</p>
-            <p className="text-muted-foreground">Blocker: {focusBlocker}</p>
+            <p className="font-semibold text-primary">Target: {formatDueDate(task.dueDate)}</p>
+            <p className="text-muted-foreground">{deadlineNote}</p>
           </div>
         )}
 
-        {task.cardType === "progress" && (
+        {task.cardType === "recurring" && (
           <div className="space-y-1 rounded-md border border-border/70 bg-background/45 px-2.5 py-2">
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>Progress</span>
-              <span>{progressValue}%</span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary transition-all"
-                style={{ width: `${progressValue}%` }}
-              />
-            </div>
-            <p className="line-clamp-1 text-[11px] text-muted-foreground">{progressMilestone}</p>
+            <p className="text-[11px] font-semibold text-primary">Repeats: {recurrenceRule}</p>
+            <p className="line-clamp-1 text-[11px] text-muted-foreground">Use this for routines and recurring chores.</p>
+          </div>
+        )}
+
+        {task.cardType === "priority" && (
+          <div className="space-y-1 rounded-md border border-border/70 bg-background/45 px-2.5 py-2">
+            <p className="text-[11px] font-semibold text-primary">Eisenhower action: {matrixAction}</p>
+            <p className="line-clamp-1 text-[11px] text-muted-foreground">
+              {matrixAction === "do"
+                ? "Urgent and important."
+                : matrixAction === "schedule"
+                  ? "Important, but not urgent."
+                  : matrixAction === "delegate"
+                    ? "Urgent, but can be delegated."
+                    : "Neither urgent nor important."}
+            </p>
           </div>
         )}
 
         {task.cardType === "checklist" && (
-          <div className="space-y-1 rounded-md border border-border/70 bg-background/45 px-2.5 py-2">
-            {checklistItems.map((item, itemIndex) => {
-              const isDone = task.status === "done" || item.done || itemIndex === 0;
+          <div className="space-y-2 rounded-md border border-border/70 bg-background/45 px-2.5 py-2">
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>Checklist</span>
+              <span>{doneCount}/{checklistItems.length} done</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${checklistPercent}%` }}
+              />
+            </div>
+            {checklistVisibleItems.map((item) => {
+              const isDone = task.status === completedStatusId || item.done;
               return (
-                <div key={item.id} className="flex items-center gap-2 text-xs">
+                <div key={item.id} className="flex items-center gap-2 rounded-sm px-1 py-0.5 text-xs">
                   <span
                     className={cn(
-                      "inline-flex h-3.5 w-3.5 items-center justify-center rounded-[3px] border text-[10px]",
+                      "inline-flex h-4 w-4 items-center justify-center rounded-[4px] border text-[10px] font-semibold",
                       isDone
                         ? "border-primary/70 bg-primary/20 text-primary"
                         : "border-border/80 bg-background text-muted-foreground"
@@ -622,10 +963,17 @@ const TaskItem = memo(function TaskItem({
                   >
                     {isDone ? "x" : ""}
                   </span>
-                  <span className={cn(isDone && "text-muted-foreground line-through")}>{item.label}</span>
+                  <span className={cn("line-clamp-1", isDone && "text-muted-foreground line-through")}>
+                    {item.label}
+                  </span>
                 </div>
               );
             })}
+            {checklistItems.length > checklistVisibleItems.length && (
+              <p className="text-[11px] text-muted-foreground">
+                +{checklistItems.length - checklistVisibleItems.length} more
+              </p>
+            )}
           </div>
         )}
 
@@ -660,6 +1008,23 @@ const TaskItem = memo(function TaskItem({
           >
             Delete
           </Button>
+          <label className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground sm:hidden">
+            Move
+            <select
+              aria-label={`Move ${task.title} to status`}
+              className="h-8 rounded-md border border-input bg-card px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={task.status}
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+              onChange={(event) => onMove(task.id, event.target.value)}
+            >
+              {sections.map((status) => (
+                <option key={`${task.id}-${status.id}`} value={status.id}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </CardContent>
     </MotionCard>
@@ -673,7 +1038,6 @@ function App() {
   const [searchText, setSearchText] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [noteSearchText, setNoteSearchText] = useState("");
-  const [notesMode, setNotesMode] = useState("split");
   const [dragOverStatus, setDragOverStatus] = useState("");
   const [draggedTaskId, setDraggedTaskId] = useState("");
   const [dropPulseStatus, setDropPulseStatus] = useState("");
@@ -682,10 +1046,17 @@ function App() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
-  const [formValues, setFormValues] = useState(blankForm);
+  const [formValues, setFormValues] = useState(() => createBlankForm());
+  const [checklistDraft, setChecklistDraft] = useState([]);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [projectDialogMode, setProjectDialogMode] = useState("create");
   const [projectFormValues, setProjectFormValues] = useState(blankProjectForm);
+  const [sectionsDialogOpen, setSectionsDialogOpen] = useState(false);
+  const [sectionDrafts, setSectionDrafts] = useState([]);
+  const [newSectionLabel, setNewSectionLabel] = useState("");
+  const [draggedSectionId, setDraggedSectionId] = useState("");
+  const [dragOverSectionId, setDragOverSectionId] = useState("");
   const notesEditorRef = useRef(null);
   const deferredSearchText = useDeferredValue(searchText);
 
@@ -697,7 +1068,18 @@ function App() {
   }, [workspace]);
 
   const tasks = activeProject?.tasks ?? [];
+  const sections = activeProject?.sections ?? DEFAULT_SECTIONS;
+  const sectionIds = useMemo(() => sections.map((section) => section.id), [sections]);
+  const defaultStatus = sectionIds[0] || DEFAULT_STATUS_ID;
+  const completedStatusId = sectionIds.includes("done")
+    ? "done"
+    : sectionIds[sectionIds.length - 1] || DEFAULT_STATUS_ID;
   const notesState = activeProject?.notesState ?? { notes: [], activeNoteId: "" };
+  const totalNoteLinks = useMemo(
+    () =>
+      notesState.notes.reduce((total, note) => total + ((Array.isArray(note.linkPreviews) ? note.linkPreviews.length : 0)), 0),
+    [notesState.notes]
+  );
 
   useEffect(() => {
     localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(workspace));
@@ -728,6 +1110,21 @@ function App() {
     const timeout = window.setTimeout(() => setDropPulseStatus(""), 320);
     return () => window.clearTimeout(timeout);
   }, [dropPulseStatus]);
+
+  useEffect(() => {
+    if (!sectionIds.includes(formValues.status)) {
+      setFormValues((current) => ({ ...current, status: defaultStatus }));
+    }
+  }, [defaultStatus, formValues.status, sectionIds]);
+
+  useEffect(() => {
+    if (dragOverStatus && !sectionIds.includes(dragOverStatus)) {
+      setDragOverStatus("");
+    }
+    if (dropPulseStatus && !sectionIds.includes(dropPulseStatus)) {
+      setDropPulseStatus("");
+    }
+  }, [dragOverStatus, dropPulseStatus, sectionIds]);
 
   const patchActiveProject = useCallback((updater) => {
     setWorkspace((current) => {
@@ -769,19 +1166,23 @@ function App() {
       })
       .sort((a, b) => b.createdAt - a.createdAt);
 
-    const initial = {
-      backlog: [],
-      "in-progress": [],
-      review: [],
-      done: []
-    };
+    const initial = sections.reduce((accumulator, section) => {
+      accumulator[section.id] = [];
+      return accumulator;
+    }, {});
 
     for (const task of filtered) {
-      initial[task.status].push(task);
+      if (initial[task.status]) {
+        initial[task.status].push(task);
+      } else {
+        const fallbackStatus = sections[0]?.id || DEFAULT_STATUS_ID;
+        if (!initial[fallbackStatus]) initial[fallbackStatus] = [];
+        initial[fallbackStatus].push(task);
+      }
     }
 
     return initial;
-  }, [tasks, deferredSearchText, priorityFilter]);
+  }, [tasks, deferredSearchText, priorityFilter, sections]);
 
   const activeNote = useMemo(
     () => notesState.notes.find((note) => note.id === notesState.activeNoteId) ?? null,
@@ -813,10 +1214,16 @@ function App() {
     };
   }, [activeNote]);
 
-  const renderedPreview = useMemo(() => {
-    if (!activeNote) return "";
-    return DOMPurify.sanitize(marked.parse(activeNote.content));
-  }, [activeNote]);
+  const activeNotePreviews = useMemo(() => {
+    if (!activeNote) return [];
+    const query = noteSearchText.trim().toLowerCase();
+    const list = Array.isArray(activeNote.linkPreviews) ? activeNote.linkPreviews : [];
+    return list.filter((item) => {
+      if (!query) return true;
+      const haystack = [item.title, item.url, item.description].join(" ").toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [activeNote, noteSearchText]);
 
   const openCreateProjectDialog = useCallback(() => {
     setProjectDialogMode("create");
@@ -829,37 +1236,143 @@ function App() {
     setProjectDialogMode("edit");
     setProjectFormValues({
       name: activeProject.name,
-      description: activeProject.description
+      description: activeProject.description,
+      type: activeProject.type ?? "custom",
+      useTemplate: false
     });
     setProjectDialogOpen(true);
   }, [activeProject]);
 
+  const openSectionsDialog = useCallback(() => {
+    setSectionDrafts(sections.map((section) => ({ ...section })));
+    setNewSectionLabel("");
+    setDraggedSectionId("");
+    setDragOverSectionId("");
+    setSectionsDialogOpen(true);
+  }, [sections]);
+
+  const handleSectionDraftLabelChange = useCallback((sectionId, label) => {
+    setSectionDrafts((current) =>
+      current.map((section) => (section.id === sectionId ? { ...section, label } : section))
+    );
+  }, []);
+
+  const handleAddSectionDraft = useCallback(() => {
+    const label = newSectionLabel.trim();
+    if (!label) return;
+
+    setSectionDrafts((current) => [
+      ...current,
+      { id: createSectionId(label, current.map((section) => section.id)), label }
+    ]);
+    setNewSectionLabel("");
+  }, [newSectionLabel]);
+
+  const handleDeleteSectionDraft = useCallback((sectionId) => {
+    setSectionDrafts((current) => {
+      if (current.length <= 1) return current;
+      return current.filter((section) => section.id !== sectionId);
+    });
+  }, []);
+
+  const handleSectionDragStart = useCallback((event, sectionId) => {
+    event.dataTransfer.setData("text/section-id", sectionId);
+    event.dataTransfer.effectAllowed = "move";
+    setDraggedSectionId(sectionId);
+    setDragOverSectionId(sectionId);
+  }, []);
+
+  const handleSectionDragOver = useCallback((event, sectionId) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDragOverSectionId((current) => (current === sectionId ? current : sectionId));
+  }, []);
+
+  const handleSectionDrop = useCallback(
+    (event, targetSectionId) => {
+      event.preventDefault();
+      const sourceSectionId = event.dataTransfer.getData("text/section-id") || draggedSectionId;
+      if (!sourceSectionId || sourceSectionId === targetSectionId) {
+        setDragOverSectionId("");
+        setDraggedSectionId("");
+        return;
+      }
+
+      setSectionDrafts((current) => {
+        const sourceIndex = current.findIndex((section) => section.id === sourceSectionId);
+        const targetIndex = current.findIndex((section) => section.id === targetSectionId);
+        if (sourceIndex < 0 || targetIndex < 0) return current;
+        const next = [...current];
+        const [moved] = next.splice(sourceIndex, 1);
+        next.splice(targetIndex, 0, moved);
+        return next;
+      });
+
+      setDragOverSectionId("");
+      setDraggedSectionId("");
+    },
+    [draggedSectionId]
+  );
+
+  const handleSectionDragEnd = useCallback(() => {
+    setDragOverSectionId("");
+    setDraggedSectionId("");
+  }, []);
+
+  const handleSaveSections = useCallback(() => {
+    const normalizedSections = normalizeSections(sectionDrafts);
+    const statusIds = normalizedSections.map((section) => section.id);
+    const fallbackStatus = statusIds[0] || DEFAULT_STATUS_ID;
+
+    patchActiveProject((project) => ({
+      ...project,
+      sections: normalizedSections,
+      tasks: project.tasks.map((task) =>
+        statusIds.includes(task.status)
+          ? task
+          : {
+              ...task,
+              status: fallbackStatus
+            }
+      )
+    }));
+
+    setFormValues((current) => ({
+      ...current,
+      status: statusIds.includes(current.status) ? current.status : fallbackStatus
+    }));
+    setSectionsDialogOpen(false);
+  }, [patchActiveProject, sectionDrafts]);
+
   const openCreateDialog = useCallback(() => {
     setEditingTaskId(null);
-    setFormValues({
-      ...blankForm,
-      progressValue: String(STATUS_PROGRESS.backlog)
-    });
+    setFormValues(createBlankForm(defaultStatus));
+    setChecklistDraft([]);
     setDialogOpen(true);
-  }, []);
+  }, [defaultStatus]);
 
   const openCreateDialogForStatus = useCallback((status) => {
-    const nextCardType = resolveTaskCardType("", status);
+    const nextStatus = sectionIds.includes(status) ? status : defaultStatus;
+    const nextCardType = resolveTaskCardType("", nextStatus);
+    const nextChecklistText =
+      nextCardType === "checklist"
+        ? "[ ] Plan steps\n[ ] Complete action\n[ ] Review result"
+        : "";
     setEditingTaskId(null);
     setFormValues({
-      ...blankForm,
-      status,
+      ...createBlankForm(defaultStatus),
+      status: nextStatus,
       cardType: nextCardType,
-      progressValue: String(STATUS_PROGRESS[status] ?? 0),
-      checklistText:
-        nextCardType === "checklist"
-          ? "[ ] Define acceptance criteria\n[ ] Complete implementation\n[ ] Final review"
-          : ""
+      checklistText: nextChecklistText,
+      recurrenceRule: nextCardType === "recurring" ? "weekly" : "none",
+      matrixAction: nextCardType === "priority" ? "do" : "schedule"
     });
+    setChecklistDraft(parseChecklistText(nextChecklistText));
     setDialogOpen(true);
-  }, []);
+  }, [defaultStatus, sectionIds]);
 
   const openEditDialog = useCallback((task) => {
+    const nextChecklistText = checklistTextFromItems(task.cardMeta.checklistItems);
     setEditingTaskId(task.id);
     setFormValues({
       title: task.title,
@@ -867,21 +1380,27 @@ function App() {
       priority: task.priority,
       status: task.status,
       cardType: task.cardType,
-      focusObjective: task.cardMeta.focusObjective,
-      focusBlocker: task.cardMeta.focusBlocker,
-      progressValue: String(task.cardMeta.progressValue),
-      progressMilestone: task.cardMeta.progressMilestone,
-      checklistText: checklistTextFromItems(task.cardMeta.checklistItems),
+      checklistText: nextChecklistText,
+      deadlineNote: task.cardMeta.deadlineNote ?? "",
+      recurrenceRule: task.cardMeta.recurrenceRule ?? "none",
+      matrixAction: task.cardMeta.matrixAction ?? "do",
       assignee: task.assignee,
       dueDate: task.dueDate,
       tags: task.tags.join(", ")
     });
+    setChecklistDraft(
+      (task.cardMeta.checklistItems ?? []).map((item) => ({
+        id: item.id || crypto.randomUUID(),
+        label: item.label ?? "",
+        done: Boolean(item.done)
+      }))
+    );
     setDialogOpen(true);
   }, []);
 
   const handleProjectFieldChange = useCallback((event) => {
-    const { name, value } = event.target;
-    setProjectFormValues((current) => ({ ...current, [name]: value }));
+    const { name, value, type, checked } = event.target;
+    setProjectFormValues((current) => ({ ...current, [name]: type === "checkbox" ? checked : value }));
   }, []);
 
   const handleSaveProject = useCallback(
@@ -889,14 +1408,25 @@ function App() {
       event.preventDefault();
       const name = projectFormValues.name.trim();
       if (!name) return;
-      const description = projectFormValues.description.trim();
+      const chosenType = resolveProjectType(projectFormValues.type);
+      const template = getTemplateForProjectType(chosenType);
+      const fallbackDescription = projectFormValues.useTemplate ? template.description : "";
+      const description = projectFormValues.description.trim() || fallbackDescription;
 
       if (projectDialogMode === "create") {
+        const tasks = projectFormValues.useTemplate ? normalizeTasks(template.tasks) : [];
+        const notesState = projectFormValues.useTemplate
+          ? createStarterNoteState(name, chosenType)
+          : buildInitialNotesState(name);
+        const resources = projectFormValues.useTemplate ? normalizeResources(template.resources) : [];
+
         const nextProject = createProject({
           name,
           description,
-          tasks: [],
-          notesState: buildInitialNotesState(name)
+          type: chosenType,
+          tasks,
+          notesState,
+          resources
         });
 
         setWorkspace((current) => ({
@@ -907,20 +1437,21 @@ function App() {
         patchActiveProject((project) => ({
           ...project,
           name,
-          description
+          description,
+          type: chosenType
         }));
       }
 
       setProjectDialogOpen(false);
     },
-    [patchActiveProject, projectDialogMode, projectFormValues.description, projectFormValues.name]
+    [patchActiveProject, projectDialogMode, projectFormValues]
   );
 
   const handleDeleteActiveProject = useCallback(() => {
     if (!activeProject) return;
 
     const confirmed = window.confirm(
-      `Delete project "${activeProject.name}" and all its tasks and notes? This cannot be undone.`
+      `Delete plan "${activeProject.name}" and all its items, notes, and resources? This cannot be undone.`
     );
     if (!confirmed) return;
 
@@ -929,10 +1460,12 @@ function App() {
 
       if (remaining.length === 0) {
         const fallbackProject = createProject({
-          name: "New Project",
+          name: "New Plan",
           description: "",
+          type: "custom",
           tasks: [],
-          notesState: buildInitialNotesState("New Project")
+          notesState: buildInitialNotesState("New Plan"),
+          resources: []
         });
         return {
           projects: [fallbackProject],
@@ -958,6 +1491,87 @@ function App() {
       return { ...current, activeProjectId: projectId };
     });
   }, []);
+
+  const addLinkPreviewToActiveNote = useCallback(
+    async (urlInput) => {
+      const rawUrl = String(urlInput || "").trim();
+      if (!rawUrl || !activeNote) return;
+      const normalizedUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+      const meta = await resolveResourceMetadata(normalizedUrl, "auto");
+      const nextPreview = normalizeResource({
+        title: meta.title || normalizedUrl,
+        url: normalizedUrl,
+        kind: meta.kind,
+        thumbnail: meta.thumbnail,
+        description: meta.description
+      });
+
+      patchActiveProject((project) => {
+        const activeId = project.notesState.activeNoteId;
+        return {
+          ...project,
+          notesState: {
+            ...project.notesState,
+            notes: project.notesState.notes.map((note) => {
+              if (note.id !== activeId) return note;
+              const existing = Array.isArray(note.linkPreviews) ? note.linkPreviews : [];
+              if (existing.some((preview) => preview.url === normalizedUrl)) return note;
+              return {
+                ...note,
+                linkPreviews: [...existing, nextPreview],
+                updatedAt: Date.now()
+              };
+            })
+          }
+        };
+      });
+    },
+    [activeNote, patchActiveProject]
+  );
+
+  const removeLinkPreviewFromActiveNote = useCallback(
+    (previewId) => {
+      patchActiveProject((project) => {
+        const activeId = project.notesState.activeNoteId;
+        return {
+          ...project,
+          notesState: {
+            ...project.notesState,
+            notes: project.notesState.notes.map((note) => {
+              if (note.id !== activeId) return note;
+              return {
+                ...note,
+                linkPreviews: (note.linkPreviews ?? []).filter((preview) => preview.id !== previewId),
+                updatedAt: Date.now()
+              };
+            })
+          }
+        };
+      });
+    },
+    [patchActiveProject]
+  );
+
+  useEffect(() => {
+    if (!activeNote) return;
+    const urls = extractUrlsFromText(activeNote.content);
+    const existing = new Set((activeNote.linkPreviews ?? []).map((preview) => preview.url));
+    const missing = urls.filter((url) => !existing.has(url));
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    const handle = window.setTimeout(async () => {
+      for (const url of missing.slice(0, 3)) {
+        if (cancelled) return;
+        await addLinkPreviewToActiveNote(url);
+      }
+    }, 260);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [activeNote, addLinkPreviewToActiveNote]);
 
   const updateActiveNote = useCallback((updates) => {
     patchActiveProject((project) => {
@@ -994,7 +1608,7 @@ function App() {
 
   const createNewNote = useCallback(() => {
     const next = createNote({
-      title: `${activeProject?.name ?? "Project"} Note`
+      title: `${activeProject?.name ?? "Plan"} Note`
     });
     patchActiveProject((project) => ({
       ...project,
@@ -1052,40 +1666,6 @@ function App() {
     updateActiveNote({ pinned: !activeNote.pinned });
   }, [activeNote, updateActiveNote]);
 
-  const exportActiveNote = useCallback(() => {
-    if (!activeNote) return;
-    const blob = new Blob([activeNote.content], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${fileNameFromTitle(activeNote.title)}.md`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-  }, [activeNote]);
-
-  const handleImportNote = useCallback(async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-
-    const content = await file.text();
-    const title = file.name.replace(/\.[^/.]+$/, "") || "Imported note";
-    const next = createNote({
-      title,
-      content
-    });
-
-    patchActiveProject((project) => ({
-      ...project,
-      notesState: {
-        notes: [next, ...project.notesState.notes],
-        activeNoteId: next.id
-      }
-    }));
-  }, [patchActiveProject]);
-
   const insertMarkdown = useCallback(
     (before, after = "", placeholder = "text") => {
       if (!activeNote) return;
@@ -1114,36 +1694,56 @@ function App() {
   function handleFieldChange(event) {
     const { name, value } = event.target;
     setFormValues((current) => {
-      if (name === "status" && current.cardType === "progress" && !current.progressMilestone.trim()) {
-        return {
-          ...current,
-          [name]: value,
-          progressValue: String(STATUS_PROGRESS[value] ?? current.progressValue)
-        };
-      }
-
       if (name === "cardType") {
         const next = { ...current, [name]: value };
-        if (value === "progress" && !current.progressMilestone.trim()) {
-          next.progressValue = String(STATUS_PROGRESS[current.status] ?? current.progressValue);
-        }
         if (value === "checklist" && !current.checklistText.trim() && current.tags.trim()) {
-          next.checklistText = current.tags
+          const generatedChecklistText = current.tags
             .split(",")
             .map((tag) => tag.trim())
             .filter(Boolean)
             .map((tag) => `[ ] ${tag}`)
             .join("\n");
+          next.checklistText = generatedChecklistText;
+          setChecklistDraft(parseChecklistText(generatedChecklistText));
+        } else if (value === "checklist" && checklistDraft.length === 0 && current.checklistText.trim()) {
+          setChecklistDraft(parseChecklistText(current.checklistText));
+        } else if (value !== "checklist") {
+          next.checklistText = checklistTextFromItems(checklistDraft);
         }
-        if (value === "focus" && !current.focusObjective.trim() && current.title.trim()) {
-          next.focusObjective = current.title.trim();
-        }
+        if (value === "recurring") next.recurrenceRule = current.recurrenceRule || "weekly";
+        if (value === "priority") next.matrixAction = current.matrixAction || "do";
+        if (value === "deadline" && !current.dueDate) next.dueDate = "";
         return next;
       }
 
       return { ...current, [name]: value };
     });
   }
+
+  const checklistFormItems = formValues.cardType === "checklist" ? checklistDraft : [];
+
+  const setChecklistFormItems = useCallback((items) => {
+    setChecklistDraft(items);
+  }, []);
+
+  const handleChecklistItemChange = useCallback((index, updates) => {
+    const nextItems = checklistFormItems.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, ...updates } : item
+    );
+    setChecklistFormItems(nextItems);
+  }, [checklistFormItems, setChecklistFormItems]);
+
+  const addChecklistFormItem = useCallback(() => {
+    setChecklistFormItems([
+      ...checklistFormItems,
+      { id: crypto.randomUUID(), label: "New checklist item", done: false }
+    ]);
+  }, [checklistFormItems, setChecklistFormItems]);
+
+  const removeChecklistFormItem = useCallback((index) => {
+    const nextItems = checklistFormItems.filter((_, itemIndex) => itemIndex !== index);
+    setChecklistFormItems(nextItems);
+  }, [checklistFormItems, setChecklistFormItems]);
 
   function handleSaveTask(event) {
     event.preventDefault();
@@ -1154,11 +1754,18 @@ function App() {
       .split(",")
       .map((tag) => tag.trim())
       .filter(Boolean);
-    const normalizedStatus = formValues.status;
+    const normalizedStatus = sectionIds.includes(formValues.status) ? formValues.status : defaultStatus;
     const normalizedCardType = resolveTaskCardType(formValues.cardType, normalizedStatus);
-    const checklistItems = parseChecklistText(formValues.checklistText);
-    const fallbackMilestone =
-      STATUSES.find((status) => status.id === normalizedStatus)?.label ?? "In progress";
+    const checklistItems =
+      normalizedCardType === "checklist"
+        ? checklistDraft
+            .map((item) => ({
+              id: item.id || crypto.randomUUID(),
+              label: String(item.label || "").trim(),
+              done: Boolean(item.done)
+            }))
+            .filter((item) => item.label)
+        : parseChecklistText(formValues.checklistText);
 
     const payload = {
       title,
@@ -1167,10 +1774,9 @@ function App() {
       status: normalizedStatus,
       cardType: normalizedCardType,
       cardMeta: {
-        focusObjective: formValues.focusObjective.trim() || title,
-        focusBlocker: formValues.focusBlocker.trim(),
-        progressValue: clampProgress(formValues.progressValue, STATUS_PROGRESS[normalizedStatus] ?? 0),
-        progressMilestone: formValues.progressMilestone.trim() || `${fallbackMilestone} phase`,
+        deadlineNote: formValues.deadlineNote.trim(),
+        recurrenceRule: formValues.recurrenceRule,
+        matrixAction: formValues.matrixAction,
         checklistItems:
           checklistItems.length > 0
             ? checklistItems
@@ -1210,19 +1816,24 @@ function App() {
     }));
   }, [patchActiveProject]);
 
-  const handleDrop = useCallback((status, event) => {
-    event.preventDefault();
-    const taskId = event.dataTransfer.getData("text/task-id");
-    if (!taskId) return;
+  const handleMoveTaskStatus = useCallback((taskId, status) => {
+    if (!taskId || !sectionIds.includes(status)) return;
 
     patchActiveProject((project) => ({
       ...project,
       tasks: project.tasks.map((task) => (task.id === taskId ? { ...task, status } : task))
     }));
+    setDropPulseStatus(status);
+  }, [patchActiveProject, sectionIds]);
+
+  const handleDrop = useCallback((status, event) => {
+    event.preventDefault();
+    const taskId = event.dataTransfer.getData("text/task-id");
+    if (!taskId) return;
+    handleMoveTaskStatus(taskId, status);
     setDraggedTaskId("");
     setDragOverStatus("");
-    setDropPulseStatus(status);
-  }, [patchActiveProject]);
+  }, [handleMoveTaskStatus]);
 
   const handleTaskDragStart = useCallback((event, taskId) => {
     event.dataTransfer.setData("text/task-id", taskId);
@@ -1238,98 +1849,125 @@ function App() {
   return (
     <main className="workspace-shell mx-auto w-[min(1560px,98vw)] py-4">
       <div className="workspace-layout grid grid-cols-1 gap-3 lg:grid-cols-[250px_minmax(0,1fr)]">
-        <aside className="workspace-sidebar flex flex-col rounded-2xl border border-border/70 bg-card/85 p-3 shadow-sm lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)]">
+        <aside
+          className={cn(
+            "workspace-sidebar flex flex-col rounded-2xl border border-border/70 bg-card/85 p-3 shadow-sm transition-[max-height] duration-300 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:max-h-[calc(100vh-2rem)]",
+            mobileSidebarOpen ? "max-h-[85vh]" : "max-h-[76px] lg:max-h-[calc(100vh-2rem)]"
+          )}
+        >
           <div className="flex items-center gap-2 rounded-xl border border-border/65 bg-background/70 px-2.5 py-2">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <KanbanSquare className="h-4 w-4" />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">KanbanBoard</p>
-              <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Multi Project</p>
+              <p className="truncate text-sm font-semibold">LifeFlow Planner</p>
+              <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Any Plan, Any Goal</p>
             </div>
-          </div>
-
-          <Button className="mt-3 h-11 justify-start gap-2 rounded-xl" onClick={openCreateProjectDialog}>
-            <Plus className="h-4 w-4" />
-            New Project
-          </Button>
-
-          <div className="mt-4">
-            <p className="text-[11px] uppercase tracking-[0.13em] text-muted-foreground">Workspaces</p>
-            <div className="mt-2 space-y-1.5 overflow-y-auto pr-1 lg:max-h-[42vh]">
-              {workspace.projects.map((project) => {
-                const isActive = project.id === activeProject?.id;
-                return (
-                  <button
-                    key={project.id}
-                    type="button"
-                    onClick={() => handleSelectProject(project.id)}
-                    className={cn(
-                      "workspace-project-item w-full rounded-xl border border-border/65 bg-background/55 px-2.5 py-2 text-left transition",
-                      isActive && "is-active border-primary/45 bg-primary/12"
-                    )}
-                  >
-                    <p className="line-clamp-1 text-sm font-semibold">{project.name}</p>
-                    <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
-                      {project.tasks.length} {project.tasks.length === 1 ? "task" : "tasks"}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <p className="text-[11px] uppercase tracking-[0.13em] text-muted-foreground">Views</p>
-            <div className="mt-2 space-y-1">
-              <button
-                type="button"
-                onClick={() => setView("board")}
-                className={cn(
-                  "workspace-view-switch flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm",
-                  view === "board"
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}
-              >
-                <KanbanSquare className="h-4 w-4" />
-                Kanban
-              </button>
-              <button
-                type="button"
-                onClick={() => setView("notes")}
-                className={cn(
-                  "workspace-view-switch flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm",
-                  view === "notes"
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}
-              >
-                <NotebookPen className="h-4 w-4" />
-                Notes
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <Button variant="outline" size="sm" className="h-9 gap-1" onClick={openEditProjectDialog}>
-              <Settings2 className="h-4 w-4" />
-              Edit
-            </Button>
             <Button
-              variant="outline"
+              type="button"
+              variant="ghost"
               size="sm"
-              className="h-9 gap-1 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={handleDeleteActiveProject}
+              className="ml-auto h-8 px-2 text-xs lg:hidden"
+              onClick={() => setMobileSidebarOpen((current) => !current)}
             >
-              <Trash2 className="h-4 w-4" />
-              Delete
+              {mobileSidebarOpen ? "Close" : "Plans"}
             </Button>
           </div>
 
-          <div className="mt-4 rounded-xl border border-dashed border-border/70 bg-background/50 p-3 text-xs text-muted-foreground">
-            <p className="font-semibold text-foreground">Pro Tip</p>
-            Use search and priority filters to quickly find tasks across the active project.
+          <div className={cn("mt-3", !mobileSidebarOpen && "hidden lg:block")}>
+            <Button className="h-11 justify-start gap-2 rounded-xl" onClick={openCreateProjectDialog}>
+              <Plus className="h-4 w-4" />
+              New Plan
+            </Button>
+
+            <div className="mt-4">
+              <p className="text-[11px] uppercase tracking-[0.13em] text-muted-foreground">Plans</p>
+              <div className="mt-2 space-y-1.5 overflow-y-auto pr-1 lg:max-h-[42vh]">
+                {workspace.projects.map((project) => {
+                  const isActive = project.id === activeProject?.id;
+                  return (
+                    <button
+                      key={project.id}
+                      type="button"
+                      onClick={() => {
+                        handleSelectProject(project.id);
+                        setMobileSidebarOpen(false);
+                      }}
+                      className={cn(
+                        "workspace-project-item w-full rounded-xl border border-border/65 bg-background/55 px-2.5 py-2 text-left transition",
+                        isActive && "is-active border-primary/45 bg-primary/12"
+                      )}
+                    >
+                      <p className="line-clamp-1 text-sm font-semibold">{project.name}</p>
+                      <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <span>{project.tasks.length} {project.tasks.length === 1 ? "item" : "items"}</span>
+                        <span className="h-1 w-1 rounded-full bg-muted-foreground/60" />
+                        <span>{PROJECT_TYPE_OPTIONS.find((option) => option.id === project.type)?.label ?? "Custom"}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <p className="text-[11px] uppercase tracking-[0.13em] text-muted-foreground">Views</p>
+              <div className="mt-2 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setView("board");
+                    setMobileSidebarOpen(false);
+                  }}
+                  className={cn(
+                    "workspace-view-switch flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm",
+                    view === "board"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  )}
+                >
+                  <KanbanSquare className="h-4 w-4" />
+                  Kanban
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setView("notes");
+                    setMobileSidebarOpen(false);
+                  }}
+                  className={cn(
+                    "workspace-view-switch flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm",
+                    view === "notes"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  )}
+                >
+                  <NotebookPen className="h-4 w-4" />
+                  Notes
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <Button variant="outline" size="sm" className="h-9 gap-1" onClick={openEditProjectDialog}>
+                <Settings2 className="h-4 w-4" />
+                Edit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={handleDeleteActiveProject}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </Button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-dashed border-border/70 bg-background/50 p-3 text-xs text-muted-foreground">
+              <p className="font-semibold text-foreground">Quick Tip</p>
+              Use templates to start fast, and save links in Notes for tutorials and material lists.
+            </div>
           </div>
         </aside>
 
@@ -1337,22 +1975,37 @@ function App() {
           <header className="workspace-topbar mb-3 rounded-2xl border border-border/70 bg-card/82 px-4 py-3 shadow-sm">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="min-w-0">
-                <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Active Project</p>
+                <div className="flex items-center gap-2 lg:hidden">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1 px-2 text-xs"
+                    onClick={() => setMobileSidebarOpen((current) => !current)}
+                  >
+                    <PanelLeft className="h-3.5 w-3.5" />
+                    Plans
+                  </Button>
+                </div>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Active Plan</p>
                 <h1 className="mt-1 line-clamp-1 text-2xl font-semibold tracking-tight sm:text-3xl">
-                  {activeProject?.name ?? "Kanban Board"}
+                  {activeProject?.name ?? "LifeFlow Planner"}
                 </h1>
                 <p className="mt-1 line-clamp-2 max-w-3xl text-sm text-muted-foreground">
-                  {activeProject?.description || "Add a project description to define scope, goals, and context."}
+                  {activeProject?.description || "Add a short plan summary so goals stay clear and simple."}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   <Badge className="border-border/70 bg-secondary text-secondary-foreground">
-                    {tasks.length} {tasks.length === 1 ? "Task" : "Tasks"}
+                    {tasks.length} {tasks.length === 1 ? "Item" : "Items"}
                   </Badge>
                   <Badge className="border-border/70 bg-secondary text-secondary-foreground">
-                    {tasks.filter((task) => task.status === "done").length} Done
+                    {tasks.filter((task) => task.status === completedStatusId).length} Done
                   </Badge>
                   <Badge className="border-border/70 bg-secondary text-secondary-foreground">
                     {notesState.notes.length} {notesState.notes.length === 1 ? "Note" : "Notes"}
+                  </Badge>
+                  <Badge className="border-border/70 bg-secondary text-secondary-foreground">
+                    {totalNoteLinks} {totalNoteLinks === 1 ? "Link" : "Links"}
                   </Badge>
                 </div>
               </div>
@@ -1363,13 +2016,12 @@ function App() {
                   <Input
                     className="h-9 pl-9"
                     type="search"
-                    placeholder={view === "board" ? "Search tasks..." : "Search notes..."}
+                    placeholder={view === "board" ? "Search items..." : "Search notes..."}
                     value={view === "board" ? searchText : noteSearchText}
-                    onChange={(event) =>
-                      view === "board"
-                        ? setSearchText(event.target.value)
-                        : setNoteSearchText(event.target.value)
-                    }
+                    onChange={(event) => {
+                      if (view === "board") setSearchText(event.target.value);
+                      else setNoteSearchText(event.target.value);
+                    }}
                   />
                 </div>
                 {view === "board" && (
@@ -1385,9 +2037,13 @@ function App() {
                       <option value="high">High</option>
                       <option value="urgent">Urgent</option>
                     </select>
-                    <Button className="h-9 gap-1.5" onClick={openCreateDialog}>
+                    <Button variant="outline" className="h-9 gap-1.5" onClick={openSectionsDialog}>
+                      <Settings2 className="h-4 w-4" />
+                      Sections
+                    </Button>
+                    <Button className="hidden h-9 gap-1.5 sm:inline-flex" onClick={openCreateDialog}>
                       <Plus className="h-4 w-4" />
-                      Add Task
+                      Add Item
                     </Button>
                   </>
                 )}
@@ -1416,7 +2072,7 @@ function App() {
           >
             <LayoutGroup id="kanban-layout">
               <motion.section layout className="kanban-board grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-4">
-                {STATUSES.map((column, columnIndex) => {
+                {sections.map((column, columnIndex) => {
                   const columnTasks = groupedTasks[column.id] ?? [];
                   return (
                     <MotionCard
@@ -1455,7 +2111,7 @@ function App() {
                       <CardContent className="space-y-2 pt-3">
                         {columnTasks.length === 0 && (
                           <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-                            No tasks match this view.
+                            No items match this view.
                           </div>
                         )}
 
@@ -1466,8 +2122,11 @@ function App() {
                               task={task}
                               index={taskIndex}
                               isDragging={draggedTaskId === task.id}
+                              sections={sections}
+                              completedStatusId={completedStatusId}
                               onEdit={openEditDialog}
                               onDelete={handleDeleteTask}
+                              onMove={handleMoveTaskStatus}
                               onDragStart={handleTaskDragStart}
                               onDragEnd={handleTaskDragEnd}
                             />
@@ -1477,11 +2136,11 @@ function App() {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="mt-1 w-full justify-center gap-1 border border-dashed border-border/70 text-xs text-muted-foreground hover:border-primary/45 hover:text-foreground"
+                          className="mt-1 hidden w-full justify-center gap-1 border border-dashed border-border/70 text-xs text-muted-foreground hover:border-primary/45 hover:text-foreground sm:inline-flex"
                           onClick={() => openCreateDialogForStatus(column.id)}
                         >
                           <Plus className="h-3.5 w-3.5" />
-                          Add Task
+                          Add Item
                         </Button>
                       </CardContent>
                     </MotionCard>
@@ -1489,6 +2148,14 @@ function App() {
                 })}
               </motion.section>
             </LayoutGroup>
+            <Button
+              type="button"
+              className="fixed bottom-4 right-4 z-30 h-11 gap-2 rounded-full px-4 shadow-lg sm:hidden"
+              onClick={openCreateDialog}
+            >
+              <Plus className="h-4 w-4" />
+              Add Item
+            </Button>
           </motion.div>
         ) : (
           <motion.div
@@ -1498,7 +2165,7 @@ function App() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25, ease: easeOut }}
           >
-            <section className="grid grid-cols-1 gap-3 lg:grid-cols-[290px_1fr]">
+            <section className="grid grid-cols-1 gap-3 lg:grid-cols-[300px_1fr]">
               <Card className="border-border/70 bg-card/85">
                 <CardHeader className="space-y-3 pb-3">
                   <div className="flex items-center justify-between">
@@ -1507,15 +2174,6 @@ function App() {
                       <FilePlus2 className="h-4 w-4" />
                       New
                     </Button>
-                  </div>
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      className="h-9 pl-9"
-                      placeholder="Search notes..."
-                      value={noteSearchText}
-                      onChange={(event) => setNoteSearchText(event.target.value)}
-                    />
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -1555,7 +2213,7 @@ function App() {
               <Card className="border-border/70 bg-card/80">
                 <CardHeader className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="text-xl">Professional Notes</CardTitle>
+                    <CardTitle className="text-xl">Notes</CardTitle>
                     <Badge className="border-muted-foreground/30 bg-muted text-muted-foreground">
                       {isSavingNotes ? "Saving..." : `Saved ${formatLastSaved(lastSavedAt)}`}
                     </Badge>
@@ -1577,7 +2235,7 @@ function App() {
                             .filter(Boolean)
                         })
                       }
-                      placeholder="tags, planning, sprint"
+                      placeholder="tags, home, learning"
                     />
                     <div className="flex items-center gap-1">
                       <Button type="button" variant="outline" size="icon" onClick={togglePinned} aria-label="Pin note">
@@ -1592,109 +2250,93 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-1">
-                      <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("**", "**", "bold text")}>
-                        <Bold className="h-4 w-4" />
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("# ", "", "Heading")}>
-                        <Heading1 className="h-4 w-4" />
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("- ", "", "List item")}>
-                        <List className="h-4 w-4" />
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("1. ", "", "First item")}>
-                        <ListOrdered className="h-4 w-4" />
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("> ", "", "Quote")}>
-                        <Quote className="h-4 w-4" />
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("`", "`", "code")}>
-                        <Code2 className="h-4 w-4" />
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("[", "](https://example.com)", "link")}>
-                        <Link2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={notesMode === "edit" ? "default" : "outline"}
-                        className="h-8 gap-1 px-2"
-                        onClick={() => setNotesMode("edit")}
-                      >
-                        <PencilLine className="h-4 w-4" />
-                        Edit
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={notesMode === "preview" ? "default" : "outline"}
-                        className="h-8 gap-1 px-2"
-                        onClick={() => setNotesMode("preview")}
-                      >
-                        <Eye className="h-4 w-4" />
-                        Preview
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={notesMode === "split" ? "default" : "outline"}
-                        className="h-8 gap-1 px-2"
-                        onClick={() => setNotesMode("split")}
-                      >
-                        <Columns2 className="h-4 w-4" />
-                        Split
-                      </Button>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("**", "**", "bold text")}>
+                      <Bold className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("# ", "", "Heading")}>
+                      <Heading1 className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("- ", "", "List item")}>
+                      <List className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("1. ", "", "First item")}>
+                      <ListOrdered className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("> ", "", "Quote")}>
+                      <Quote className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("`", "`", "code")}>
+                      <Code2 className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("[", "](https://example.com)", "link")}>
+                      <Link2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </CardHeader>
 
                 <CardContent className="space-y-3">
-                  <div className={cn("grid gap-3", notesMode === "split" ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1")}>
-                    {notesMode !== "preview" && (
-                      <Textarea
-                        ref={notesEditorRef}
-                        className="min-h-[56vh] leading-relaxed"
-                        placeholder="Write in Markdown..."
-                        value={activeNote?.content ?? ""}
-                        onChange={(event) => updateActiveNote({ content: event.target.value })}
-                      />
-                    )}
+                  <Textarea
+                    ref={notesEditorRef}
+                    className="min-h-[42vh] leading-relaxed"
+                    placeholder="Write your note... Paste any URL to auto-generate a link card preview."
+                    value={activeNote?.content ?? ""}
+                    onPaste={(event) => {
+                      const pastedText = event.clipboardData?.getData("text") || "";
+                      const urls = extractUrlsFromText(pastedText);
+                      if (urls.length > 0) {
+                        window.setTimeout(() => {
+                          urls.slice(0, 3).forEach((url) => {
+                            addLinkPreviewToActiveNote(url);
+                          });
+                        }, 0);
+                      }
+                    }}
+                    onChange={(event) => updateActiveNote({ content: event.target.value })}
+                  />
 
-                    {notesMode !== "edit" && (
-                      <div className="markdown-preview min-h-[56vh] rounded-md border border-border/70 bg-background/45 p-4">
-                        {renderedPreview ? (
-                          <div dangerouslySetInnerHTML={{ __html: renderedPreview }} />
-                        ) : (
-                          <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/70 bg-background/45 px-3 py-2 text-xs text-muted-foreground">
+                  <div className="rounded-md border border-border/70 bg-background/45 px-3 py-2 text-xs text-muted-foreground">
                     <div className="flex flex-wrap items-center gap-3">
                       <span>{noteMetrics.words} words</span>
                       <span>{noteMetrics.characters} characters</span>
                       <span>{noteMetrics.readTime}</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button type="button" size="sm" variant="outline" className="h-8 gap-1 px-2" onClick={exportActiveNote}>
-                        <Download className="h-4 w-4" />
-                        Export MD
-                      </Button>
-                      <label className="inline-flex cursor-pointer items-center">
-                        <input type="file" accept=".md,.txt,text/markdown,text/plain" className="hidden" onChange={handleImportNote} />
-                        <span className="inline-flex h-8 items-center gap-1 rounded-md border border-input bg-background px-2 text-sm hover:bg-accent hover:text-accent-foreground">
-                          <Upload className="h-4 w-4" />
-                          Import
-                        </span>
-                      </label>
-                    </div>
                   </div>
+
+                  {activeNotePreviews.length > 0 && (
+                    <div className="space-y-1.5">
+                      {activeNotePreviews.map((preview) => (
+                        <div
+                          key={preview.id}
+                          className="flex items-center gap-2 rounded-md border border-border/70 bg-background/55 px-2 py-2"
+                        >
+                          <img
+                            src={preview.thumbnail || fallbackThumbnailForUrl(preview.url, preview.kind)}
+                            alt={preview.title}
+                            className="h-10 w-14 flex-none rounded object-cover"
+                            loading="lazy"
+                          />
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 text-left"
+                            onClick={() => window.open(preview.url, "_blank", "noopener,noreferrer")}
+                          >
+                            <p className="line-clamp-1 text-xs font-medium">{preview.title}</p>
+                            <p className="line-clamp-1 text-[11px] text-muted-foreground">{preview.url}</p>
+                          </button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-[11px] text-destructive hover:text-destructive"
+                            onClick={() => removeLinkPreviewFromActiveNote(preview.id)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </section>
@@ -1707,24 +2349,52 @@ function App() {
       <Dialog open={projectDialogOpen} onOpenChange={setProjectDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{projectDialogMode === "create" ? "Create Project" : "Edit Project"}</DialogTitle>
+            <DialogTitle>{projectDialogMode === "create" ? "Create Plan" : "Edit Plan"}</DialogTitle>
             <DialogDescription>
-              Manage separate boards and notes by project.
+              Organize separate items, notes, and resources by plan.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSaveProject} className="mt-4 space-y-3">
             <label className="space-y-1">
-              <span className="text-xs text-muted-foreground">Project Name</span>
+              <span className="text-xs text-muted-foreground">Plan Name</span>
               <Input
                 name="name"
                 required
                 maxLength={80}
                 value={projectFormValues.name}
                 onChange={handleProjectFieldChange}
-                placeholder="Website Redesign"
+                placeholder="Home Renovation"
               />
             </label>
+
+            <label className="space-y-1">
+              <span className="text-xs text-muted-foreground">Plan Type</span>
+              <select
+                name="type"
+                className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={projectFormValues.type}
+                onChange={handleProjectFieldChange}
+              >
+                {PROJECT_TYPE_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {projectDialogMode === "create" && (
+              <label className="flex items-center gap-2 rounded-md border border-border/70 bg-background/50 px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="useTemplate"
+                  checked={projectFormValues.useTemplate}
+                  onChange={handleProjectFieldChange}
+                />
+                Start with a template (starter items, notes, and resources)
+              </label>
+            )}
 
             <label className="space-y-1">
               <span className="text-xs text-muted-foreground">Description</span>
@@ -1734,23 +2404,124 @@ function App() {
                 maxLength={400}
                 value={projectFormValues.description}
                 onChange={handleProjectFieldChange}
-                placeholder="Goals, milestones, owners, and context for this project."
+                placeholder="Goals, budget, reminders, and context for this plan."
               />
             </label>
 
             <DialogFooter>
-              <Button type="submit">{projectDialogMode === "create" ? "Create Project" : "Save Changes"}</Button>
+              <Button type="submit">{projectDialogMode === "create" ? "Create Plan" : "Save Changes"}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={sectionsDialogOpen}
+        onOpenChange={(open) => {
+          setSectionsDialogOpen(open);
+          if (!open) {
+            setDragOverSectionId("");
+            setDraggedSectionId("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Manage Sections</DialogTitle>
+            <DialogDescription>
+              Add, rename, or remove board sections for this plan.
+            </DialogDescription>
+          </DialogHeader>
+
+            <div className="mt-4 space-y-3">
+              <div className="max-h-[40vh] space-y-2 overflow-y-auto pr-1">
+                {sectionDrafts.map((section, index) => (
+                  <div
+                    key={section.id}
+                    onDragOver={(event) => handleSectionDragOver(event, section.id)}
+                    onDrop={(event) => handleSectionDrop(event, section.id)}
+                    className={cn(
+                      "rounded-md border border-border/70 bg-background/45 p-2.5 transition-colors",
+                      dragOverSectionId === section.id && "border-primary/60 bg-primary/10",
+                      draggedSectionId === section.id && "opacity-70"
+                    )}
+                  >
+                    <div className="mb-1 text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                      Section {index + 1}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 cursor-grab active:cursor-grabbing"
+                        draggable
+                        onDragStart={(event) => handleSectionDragStart(event, section.id)}
+                        onDragEnd={handleSectionDragEnd}
+                        aria-label={`Drag to reorder ${section.label}`}
+                      >
+                        <GripVertical className="h-4 w-4" />
+                      </Button>
+                      <Input
+                        value={section.label}
+                        maxLength={40}
+                        onChange={(event) => handleSectionDraftLabelChange(section.id, event.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 px-2 text-destructive hover:text-destructive"
+                        disabled={sectionDrafts.length <= 1}
+                        onClick={() => handleDeleteSectionDraft(section.id)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+              <Input
+                placeholder="New section name"
+                maxLength={40}
+                value={newSectionLabel}
+                onChange={(event) => setNewSectionLabel(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  handleAddSectionDraft();
+                }}
+              />
+              <Button type="button" className="gap-1.5" onClick={handleAddSectionDraft}>
+                <Plus className="h-4 w-4" />
+                Add Section
+              </Button>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Drag the handle to reorder sections. If you delete a section, its items move to the first section.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSectionsDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveSections}>
+              Save Sections
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingTaskId ? "Edit Task" : "Add Task"}</DialogTitle>
+            <DialogTitle>{editingTaskId ? "Edit Item" : "Add Item"}</DialogTitle>
             <DialogDescription>
-              Track status, ownership, and delivery details in one place.
+              Track status, context, and details in one place.
             </DialogDescription>
           </DialogHeader>
 
@@ -1767,7 +2538,7 @@ function App() {
             </label>
 
             <label className="space-y-1">
-              <span className="text-xs text-muted-foreground">Assignee</span>
+              <span className="text-xs text-muted-foreground">Person / Place</span>
               <Input
                 name="assignee"
                 maxLength={40}
@@ -1809,10 +2580,11 @@ function App() {
                 value={formValues.status}
                 onChange={handleFieldChange}
               >
-                <option value="backlog">Backlog</option>
-                <option value="in-progress">In Progress</option>
-                <option value="review">Review</option>
-                <option value="done">Done</option>
+                {sections.map((section) => (
+                  <option key={section.id} value={section.id}>
+                    {section.label}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -1832,76 +2604,107 @@ function App() {
               </select>
             </label>
 
-            {formValues.cardType === "focus" && (
-              <>
-                <label className="space-y-1 sm:col-span-2">
-                  <span className="text-xs text-muted-foreground">Focus Outcome</span>
-                  <Input
-                    name="focusObjective"
-                    maxLength={120}
-                    value={formValues.focusObjective}
-                    onChange={handleFieldChange}
-                    placeholder="What outcome must this task deliver?"
-                  />
-                </label>
-                <label className="space-y-1 sm:col-span-2">
-                  <span className="text-xs text-muted-foreground">Primary Blocker</span>
-                  <Input
-                    name="focusBlocker"
-                    maxLength={120}
-                    value={formValues.focusBlocker}
-                    onChange={handleFieldChange}
-                    placeholder="What can block this task?"
-                  />
-                </label>
-              </>
+            {formValues.cardType === "deadline" && (
+              <label className="space-y-1 sm:col-span-2">
+                <span className="text-xs text-muted-foreground">Deadline Note</span>
+                <Input
+                  name="deadlineNote"
+                  maxLength={120}
+                  value={formValues.deadlineNote}
+                  onChange={handleFieldChange}
+                  placeholder="Why this date matters"
+                />
+              </label>
             )}
 
-            {formValues.cardType === "progress" && (
-              <>
-                <label className="space-y-1">
-                  <span className="text-xs text-muted-foreground">Progress %</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    name="progressValue"
-                    value={formValues.progressValue}
-                    onChange={handleFieldChange}
-                  />
-                </label>
-                <label className="space-y-1 sm:col-span-2">
-                  <span className="text-xs text-muted-foreground">Current Milestone</span>
-                  <Input
-                    name="progressMilestone"
-                    maxLength={120}
-                    value={formValues.progressMilestone}
-                    onChange={handleFieldChange}
-                    placeholder="Wireframes approved, API integrated, etc."
-                  />
-                </label>
-              </>
+            {formValues.cardType === "recurring" && (
+              <label className="space-y-1 sm:col-span-2">
+                <span className="text-xs text-muted-foreground">Repeat</span>
+                <select
+                  name="recurrenceRule"
+                  className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={formValues.recurrenceRule}
+                  onChange={handleFieldChange}
+                >
+                  <option value="none">None</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </label>
+            )}
+
+            {formValues.cardType === "priority" && (
+              <label className="space-y-1 sm:col-span-2">
+                <span className="text-xs text-muted-foreground">Priority Matrix Action</span>
+                <select
+                  name="matrixAction"
+                  className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={formValues.matrixAction}
+                  onChange={handleFieldChange}
+                >
+                  <option value="do">Do</option>
+                  <option value="schedule">Schedule</option>
+                  <option value="delegate">Delegate</option>
+                  <option value="drop">Drop</option>
+                </select>
+              </label>
             )}
 
             {formValues.cardType === "checklist" && (
-              <label className="space-y-1 sm:col-span-2">
-                <span className="text-xs text-muted-foreground">Checklist</span>
-                <Textarea
-                  name="checklistText"
-                  rows={5}
-                  maxLength={500}
-                  value={formValues.checklistText}
-                  onChange={handleFieldChange}
-                  placeholder={"[x] Research complete\n[ ] Draft first version\n[ ] Stakeholder review"}
-                />
-              </label>
+              <div className="space-y-2 sm:col-span-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Checklist</span>
+                  <Button type="button" size="sm" variant="outline" className="h-7 px-2" onClick={addChecklistFormItem}>
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    Add Step
+                  </Button>
+                </div>
+                <div className="space-y-1.5 rounded-md border border-border/70 bg-background/45 p-2">
+                  {checklistFormItems.map((item, index) => (
+                    <div key={item.id || `${index}-${item.label}`} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={item.done}
+                        onChange={(event) =>
+                          handleChecklistItemChange(index, { done: event.target.checked })
+                        }
+                      />
+                      <Input
+                        value={item.label}
+                        maxLength={160}
+                        onChange={(event) =>
+                          handleChecklistItemChange(index, { label: event.target.value })
+                        }
+                        placeholder={`Step ${index + 1}`}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2 text-destructive hover:text-destructive"
+                        onClick={() => removeChecklistFormItem(index)}
+                        aria-label={`Remove step ${index + 1}`}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  {checklistFormItems.length === 0 && (
+                    <div className="rounded border border-dashed border-border/70 px-2 py-2 text-xs text-muted-foreground">
+                      No steps yet. Click Add Step to build a checklist.
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
             <label className="space-y-1 sm:col-span-2">
               <span className="text-xs text-muted-foreground">Tags (comma separated)</span>
               <Input
                 name="tags"
-                placeholder="frontend, urgent, customer"
+                placeholder="home, urgent, tutorial"
                 value={formValues.tags}
                 onChange={handleFieldChange}
               />
@@ -1933,7 +2736,7 @@ function App() {
               ) : (
                 <span />
               )}
-              <Button type="submit">Save Task</Button>
+              <Button type="submit">Save Item</Button>
             </DialogFooter>
           </form>
         </DialogContent>

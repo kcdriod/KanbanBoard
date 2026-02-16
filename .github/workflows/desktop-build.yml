@@ -1,0 +1,114 @@
+name: Desktop Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: "Create/update a GitHub Release with built artifacts"
+        type: boolean
+        required: false
+        default: false
+      tag:
+        description: "Tag to release (required when create_release is true)"
+        type: string
+        required: false
+      prerelease:
+        description: "Mark release as prerelease"
+        type: boolean
+        required: false
+        default: false
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            npm_script: build:mac
+            artifact_path: |
+              release/*.dmg
+              release/latest*.yml
+              release/*.zip
+            artifact_name: desktop-macos
+          - os: windows-latest
+            npm_script: build:win
+            artifact_path: |
+              release/*.exe
+              release/*.blockmap
+              release/latest*.yml
+            artifact_name: desktop-windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build installer
+        run: npm run ${{ matrix.npm_script }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: |
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && inputs.create_release)
+
+    steps:
+      - name: Resolve tag
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          elif [[ -n "${{ inputs.tag }}" ]]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Manual release requires 'tag' input." >&2
+            exit 1
+          fi
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Show release assets
+        shell: bash
+        run: |
+          ls -la release-assets
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          generate_release_notes: true
+          prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
+          files: |
+            release-assets/**

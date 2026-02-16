@@ -1,0 +1,24 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mark-bg" x1="18" y1="18" x2="238" y2="238" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EE8B4A"/>
+      <stop offset="1" stop-color="#58A88A"/>
+    </linearGradient>
+    <linearGradient id="mark-card" x1="60" y1="52" x2="192" y2="214" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF8F0" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.9"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="18" y="18" width="220" height="220" rx="52" fill="url(#mark-bg)"/>
+  <rect x="60" y="52" width="42" height="156" rx="13" fill="url(#mark-card)"/>
+  <rect x="108" y="74" width="42" height="134" rx="13" fill="url(#mark-card)"/>
+  <rect x="156" y="98" width="42" height="110" rx="13" fill="url(#mark-card)"/>
+
+  <rect x="69" y="66" width="24" height="8" rx="4" fill="#E67834" fill-opacity="0.84"/>
+  <rect x="69" y="82" width="24" height="8" rx="4" fill="#66B89A" fill-opacity="0.84"/>
+  <rect x="117" y="88" width="24" height="8" rx="4" fill="#E67834" fill-opacity="0.84"/>
+  <rect x="117" y="104" width="24" height="8" rx="4" fill="#66B89A" fill-opacity="0.84"/>
+  <rect x="165" y="112" width="24" height="8" rx="4" fill="#E67834" fill-opacity="0.84"/>
+  <rect x="165" y="128" width="24" height="8" rx="4" fill="#66B89A" fill-opacity="0.84"/>
+</svg>

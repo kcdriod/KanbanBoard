@@ -57,3 +57,42 @@ npm run build:linux
 ```
 
 Packaged installers/artifacts are generated in `release/`.
+
+## CI Desktop Builds
+
+GitHub Actions workflow included:
+
+- `.github/workflows/desktop-build.yml`
+
+Build targets:
+
+- macOS DMG (`build:mac`)
+- Windows EXE / NSIS (`build:win`)
+
+Runs on:
+
+- Manual trigger
+- Tag push matching `v*`
+
+Release behavior:
+
+- Tag push (example: `v1.0.0`) builds macOS + Windows installers and publishes/updates a GitHub Release for that tag.
+- Manual trigger can optionally publish a release by enabling `create_release` and providing `tag`.
+
+## Future Android / iOS
+
+For mobile packaging, keep the current React/Vite renderer and add Capacitor native shells.
+
+Useful scripts (after installing Capacitor packages):
+
+- `npm run mobile:init`
+- `npm run mobile:add:android`
+- `npm run mobile:add:ios`
+- `npm run mobile:sync`
+- `npm run mobile:open:android`
+- `npm run mobile:open:ios`
+
+Details:
+
+- `docs/PACKAGING_AND_MOBILE.md`
+- `docs/CROSS_PLATFORM_REARCHITECTURE.md`

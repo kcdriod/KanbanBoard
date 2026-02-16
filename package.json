@@ -15,6 +15,12 @@
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",
+    "mobile:init": "npx cap init",
+    "mobile:add:android": "npx cap add android",
+    "mobile:add:ios": "npx cap add ios",
+    "mobile:sync": "npm run build && npx cap sync",
+    "mobile:open:android": "npx cap open android",
+    "mobile:open:ios": "npx cap open ios",
     "preview": "vite preview",
     "start": "electron ."
   },
@@ -40,6 +46,7 @@
     "cross-env": "^10.1.0",
     "electron": "^40.4.1",
     "electron-builder": "^26.7.0",
+    "playwright": "^1.58.2",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "vite": "^7.1.5",
@@ -48,6 +55,7 @@
   "build": {
     "appId": "com.kanbanboard.desktop",
     "productName": "KanbanBoard",
+    "icon": "build/icons/icon-1024.png",
     "directories": {
       "output": "release"
     },
@@ -60,16 +68,19 @@
       "main": "electron/main.cjs"
     },
     "win": {
+      "icon": "build/icons/icon-1024.png",
       "target": [
         "nsis"
       ]
     },
     "mac": {
+      "icon": "build/icons/icon.icns",
       "target": [
         "dmg"
       ]
     },
     "linux": {
+      "icon": "build/icons/icon-1024.png",
       "target": [
         "AppImage"
       ]
