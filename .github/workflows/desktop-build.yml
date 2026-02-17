@@ -82,6 +82,22 @@ jobs:
         run: npm ci
 
       - name: Build installer
+        env:
+          # Windows signing (optional)
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          WIN_CSC_NAME: ${{ secrets.WIN_CSC_NAME }}
+          # macOS signing + notarization (optional)
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          CSC_NAME: ${{ secrets.MAC_CSC_NAME }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Alternate App Store Connect API key notarization flow (optional)
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: ${{ matrix.build_cmd }}
 
       - name: Upload artifacts
@@ -127,6 +143,30 @@ jobs:
         shell: bash
         run: ls -la release-assets
 
+      - name: Apply signed/unsigned suffix to installer names
+        shell: bash
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+        run: |
+          win_suffix="unsigned"
+          [[ -n "$WIN_CSC_LINK" ]] && win_suffix="signed"
+
+          mac_suffix="unsigned"
+          [[ -n "$MAC_CSC_LINK" ]] && mac_suffix="signed"
+
+          for file in release-assets/*.exe; do
+            [[ -f "$file" ]] || continue
+            mv "$file" "${file%.exe}-${win_suffix}.exe"
+          done
+
+          for file in release-assets/*.dmg; do
+            [[ -f "$file" ]] || continue
+            mv "$file" "${file%.dmg}-${mac_suffix}.dmg"
+          done
+
+          ls -la release-assets
+
       - name: Ensure release exists
         shell: bash
         env:
@@ -155,9 +195,9 @@ jobs:
           TAG_NAME: ${{ steps.resolve_tag.outputs.tag }}
           GH_REPO: ${{ github.repository }}
         run: |
-          mapfile -t files < <(find release-assets -maxdepth 1 -type f -print)
+          mapfile -t files < <(find release-assets -maxdepth 1 -type f \( -name "*.exe" -o -name "*.dmg" \) -print)
           if [[ ${#files[@]} -eq 0 ]]; then
-            echo "No release assets found." >&2
+            echo "No installer assets found." >&2
             exit 1
           fi
           gh release upload "$TAG_NAME" "${files[@]}" --clobber --repo "$GH_REPO"

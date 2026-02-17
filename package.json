@@ -51,6 +51,9 @@
     "vite": "^7.1.5",
     "wait-on": "^9.0.4"
   },
+  "optionalDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "^4.57.1"
+  },
   "build": {
     "appId": "com.kanbanboard.desktop",
     "productName": "KanbanBoard",
@@ -74,6 +77,10 @@
     },
     "mac": {
       "icon": "build/icons/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "target": [
         "dmg"
       ]
