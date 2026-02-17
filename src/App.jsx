@@ -839,7 +839,6 @@ const TaskItem = memo(function TaskItem({
   onDragStart,
   onDragEnd
 }) {
-  const delay = Math.min(index * 0.03, 0.15);
   const cardTypeLabel =
     TASK_CARD_TYPE_OPTIONS.find((option) => option.id === task.cardType)?.label ?? "Basic";
   const deadlineNote = task.cardMeta.deadlineNote || "No extra deadline note.";
@@ -878,7 +877,7 @@ const TaskItem = memo(function TaskItem({
       exit={{ opacity: 1, y: 0, scale: 1 }}
       transition={{
         layout: springLayout,
-        default: { duration: 0.18, ease: easeOut, delay }
+        default: { duration: 0.16, ease: easeOut }
       }}
       whileHover={
         isDragging
@@ -1047,6 +1046,7 @@ function App() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [formValues, setFormValues] = useState(() => createBlankForm());
+  const [formErrors, setFormErrors] = useState({ title: "" });
   const [checklistDraft, setChecklistDraft] = useState([]);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
@@ -1057,6 +1057,7 @@ function App() {
   const [newSectionLabel, setNewSectionLabel] = useState("");
   const [draggedSectionId, setDraggedSectionId] = useState("");
   const [dragOverSectionId, setDragOverSectionId] = useState("");
+  const taskTitleInputRef = useRef(null);
   const notesEditorRef = useRef(null);
   const deferredSearchText = useDeferredValue(searchText);
 
@@ -1116,6 +1117,12 @@ function App() {
       setFormValues((current) => ({ ...current, status: defaultStatus }));
     }
   }, [defaultStatus, formValues.status, sectionIds]);
+
+  useEffect(() => {
+    if (!dialogOpen) {
+      setFormErrors({ title: "" });
+    }
+  }, [dialogOpen]);
 
   useEffect(() => {
     if (dragOverStatus && !sectionIds.includes(dragOverStatus)) {
@@ -1202,6 +1209,26 @@ function App() {
         return b.updatedAt - a.updatedAt;
       });
   }, [notesState.notes, noteSearchText]);
+
+  const isActiveNoteInFiltered = useMemo(
+    () => filteredNotes.some((note) => note.id === notesState.activeNoteId),
+    [filteredNotes, notesState.activeNoteId]
+  );
+
+  useEffect(() => {
+    const query = noteSearchText.trim();
+    if (!query || filteredNotes.length === 0 || isActiveNoteInFiltered) return;
+
+    patchActiveProject((project) => ({
+      ...project,
+      notesState: {
+        ...project.notesState,
+        activeNoteId: filteredNotes[0].id
+      }
+    }));
+  }, [filteredNotes, isActiveNoteInFiltered, noteSearchText, patchActiveProject]);
+
+  const isActiveNoteOutsideFilter = Boolean(noteSearchText.trim()) && Boolean(activeNote) && !isActiveNoteInFiltered;
 
   const noteMetrics = useMemo(() => {
     if (!activeNote) return { words: 0, characters: 0, readTime: "0 min read" };
@@ -1347,6 +1374,7 @@ function App() {
   const openCreateDialog = useCallback(() => {
     setEditingTaskId(null);
     setFormValues(createBlankForm(defaultStatus));
+    setFormErrors({ title: "" });
     setChecklistDraft([]);
     setDialogOpen(true);
   }, [defaultStatus]);
@@ -1367,6 +1395,7 @@ function App() {
       recurrenceRule: nextCardType === "recurring" ? "weekly" : "none",
       matrixAction: nextCardType === "priority" ? "do" : "schedule"
     });
+    setFormErrors({ title: "" });
     setChecklistDraft(parseChecklistText(nextChecklistText));
     setDialogOpen(true);
   }, [defaultStatus, sectionIds]);
@@ -1388,6 +1417,7 @@ function App() {
       dueDate: task.dueDate,
       tags: task.tags.join(", ")
     });
+    setFormErrors({ title: "" });
     setChecklistDraft(
       (task.cardMeta.checklistItems ?? []).map((item) => ({
         id: item.id || crypto.randomUUID(),
@@ -1693,6 +1723,9 @@ function App() {
 
   function handleFieldChange(event) {
     const { name, value } = event.target;
+    if (name === "title") {
+      setFormErrors((current) => (current.title ? { ...current, title: "" } : current));
+    }
     setFormValues((current) => {
       if (name === "cardType") {
         const next = { ...current, [name]: value };
@@ -1748,7 +1781,12 @@ function App() {
   function handleSaveTask(event) {
     event.preventDefault();
     const title = formValues.title.trim();
-    if (!title) return;
+    if (!title) {
+      setFormErrors({ title: "Title is required." });
+      taskTitleInputRef.current?.focus();
+      return;
+    }
+    setFormErrors({ title: "" });
 
     const parsedTags = formValues.tags
       .split(",")
@@ -1831,7 +1869,7 @@ function App() {
     const taskId = event.dataTransfer.getData("text/task-id");
     if (!taskId) return;
     handleMoveTaskStatus(taskId, status);
-    setDraggedTaskId("");
+    window.requestAnimationFrame(() => setDraggedTaskId(""));
     setDragOverStatus("");
   }, [handleMoveTaskStatus]);
 
@@ -1842,7 +1880,7 @@ function App() {
   }, []);
 
   const handleTaskDragEnd = useCallback(() => {
-    setDraggedTaskId("");
+    window.setTimeout(() => setDraggedTaskId(""), 24);
     setDragOverStatus("");
   }, []);
 
@@ -2115,23 +2153,21 @@ function App() {
                           </div>
                         )}
 
-                        <AnimatePresence initial={false} mode="sync">
-                          {columnTasks.map((task, taskIndex) => (
-                            <TaskItem
-                              key={task.id}
-                              task={task}
-                              index={taskIndex}
-                              isDragging={draggedTaskId === task.id}
-                              sections={sections}
-                              completedStatusId={completedStatusId}
-                              onEdit={openEditDialog}
-                              onDelete={handleDeleteTask}
-                              onMove={handleMoveTaskStatus}
-                              onDragStart={handleTaskDragStart}
-                              onDragEnd={handleTaskDragEnd}
-                            />
-                          ))}
-                        </AnimatePresence>
+                        {columnTasks.map((task, taskIndex) => (
+                          <TaskItem
+                            key={task.id}
+                            task={task}
+                            index={taskIndex}
+                            isDragging={draggedTaskId === task.id}
+                            sections={sections}
+                            completedStatusId={completedStatusId}
+                            onEdit={openEditDialog}
+                            onDelete={handleDeleteTask}
+                            onMove={handleMoveTaskStatus}
+                            onDragStart={handleTaskDragStart}
+                            onDragEnd={handleTaskDragEnd}
+                          />
+                        ))}
                         <Button
                           type="button"
                           variant="ghost"
@@ -2205,6 +2241,11 @@ function App() {
                   {filteredNotes.length === 0 && (
                     <div className="rounded-md border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
                       No notes match your search.
+                      {isActiveNoteOutsideFilter && (
+                        <p className="mt-1 text-[11px]">
+                          You are still editing &quot;{activeNote?.title || "Untitled note"}&quot;.
+                        </p>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -2250,26 +2291,81 @@ function App() {
                     </div>
                   </div>
 
+                  {isActiveNoteOutsideFilter && (
+                    <p className="rounded-md border border-amber-500/35 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-200">
+                      Current note is outside your search results.
+                    </p>
+                  )}
+
                   <div className="flex flex-wrap items-center gap-1">
-                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("**", "**", "bold text")}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2"
+                      aria-label="Insert bold text"
+                      onClick={() => insertMarkdown("**", "**", "bold text")}
+                    >
                       <Bold className="h-4 w-4" />
                     </Button>
-                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("# ", "", "Heading")}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2"
+                      aria-label="Insert heading"
+                      onClick={() => insertMarkdown("# ", "", "Heading")}
+                    >
                       <Heading1 className="h-4 w-4" />
                     </Button>
-                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("- ", "", "List item")}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2"
+                      aria-label="Insert bulleted list item"
+                      onClick={() => insertMarkdown("- ", "", "List item")}
+                    >
                       <List className="h-4 w-4" />
                     </Button>
-                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("1. ", "", "First item")}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2"
+                      aria-label="Insert numbered list item"
+                      onClick={() => insertMarkdown("1. ", "", "First item")}
+                    >
                       <ListOrdered className="h-4 w-4" />
                     </Button>
-                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("> ", "", "Quote")}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2"
+                      aria-label="Insert quote"
+                      onClick={() => insertMarkdown("> ", "", "Quote")}
+                    >
                       <Quote className="h-4 w-4" />
                     </Button>
-                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("`", "`", "code")}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2"
+                      aria-label="Insert inline code"
+                      onClick={() => insertMarkdown("`", "`", "code")}
+                    >
                       <Code2 className="h-4 w-4" />
                     </Button>
-                    <Button type="button" size="sm" variant="outline" className="h-8 px-2" onClick={() => insertMarkdown("[", "](https://example.com)", "link")}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2"
+                      aria-label="Insert link"
+                      onClick={() => insertMarkdown("[", "](https://example.com)", "link")}
+                    >
                       <Link2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -2525,16 +2621,24 @@ function App() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSaveTask} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <form noValidate onSubmit={handleSaveTask} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="space-y-1 sm:col-span-2">
               <span className="text-xs text-muted-foreground">Title</span>
               <Input
+                ref={taskTitleInputRef}
                 name="title"
                 required
                 maxLength={80}
                 value={formValues.title}
                 onChange={handleFieldChange}
+                aria-invalid={formErrors.title ? "true" : "false"}
+                aria-describedby={formErrors.title ? "task-title-error" : undefined}
               />
+              {formErrors.title && (
+                <p id="task-title-error" className="text-xs text-destructive">
+                  {formErrors.title}
+                </p>
+              )}
             </label>
 
             <label className="space-y-1">
