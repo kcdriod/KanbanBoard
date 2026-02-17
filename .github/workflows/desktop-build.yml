@@ -82,6 +82,7 @@ jobs:
         run: npm ci
 
       - name: Build installer
+        shell: bash
         env:
           # Windows signing (optional)
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
@@ -98,7 +99,33 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: ${{ matrix.build_cmd }}
+        run: |
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            invalid_csc=false
+            if [[ -n "${CSC_LINK:-}" ]]; then
+              case "$CSC_LINK" in
+                file://*)
+                  cert_path="${CSC_LINK#file://}"
+                  [[ -f "$cert_path" ]] || invalid_csc=true
+                  ;;
+                /*)
+                  [[ -f "$CSC_LINK" ]] || invalid_csc=true
+                  ;;
+              esac
+            fi
+
+            if [[ -z "${CSC_LINK:-}" || "$invalid_csc" == "true" ]]; then
+              if [[ "$invalid_csc" == "true" ]]; then
+                echo "::warning::MAC_CSC_LINK is not a valid file/link value for this runner (${CSC_LINK}). Building unsigned macOS installer."
+              else
+                echo "No macOS signing certificate configured. Building unsigned macOS installer."
+              fi
+              unset CSC_LINK CSC_KEY_PASSWORD CSC_NAME APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER
+              export CSC_IDENTITY_AUTO_DISCOVERY=false
+            fi
+          fi
+
+          ${{ matrix.build_cmd }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -149,11 +176,24 @@ jobs:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
         run: |
+          is_configured_signing_link() {
+            local link="$1"
+            if [[ -z "$link" ]]; then
+              return 1
+            fi
+            case "$link" in
+              http://*|https://*|base64:*|data:*) return 0 ;;
+              file://*) return 0 ;;
+              /*) return 1 ;; # absolute runner paths are not portable CI cert links
+              *) return 0 ;;   # raw base64 / secret content
+            esac
+          }
+
           win_suffix="unsigned"
-          [[ -n "$WIN_CSC_LINK" ]] && win_suffix="signed"
+          is_configured_signing_link "$WIN_CSC_LINK" && win_suffix="signed"
 
           mac_suffix="unsigned"
-          [[ -n "$MAC_CSC_LINK" ]] && mac_suffix="signed"
+          is_configured_signing_link "$MAC_CSC_LINK" && mac_suffix="signed"
 
           for file in release-assets/*.exe; do
             [[ -f "$file" ]] || continue
