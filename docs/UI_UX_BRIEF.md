@@ -1,7 +1,7 @@
-# KanbanBoard UI/UX Brief
+# LifeFlowPlanner UI/UX Brief
 
 ## 1. Project Summary
-KanbanBoard is a desktop-first productivity app for managing tasks and notes across multiple projects.
+LifeFlowPlanner is a desktop-first productivity app for managing tasks and notes across multiple projects.
 
 - Platform: Web + Electron desktop app
 - Stack: React, Vite, Tailwind CSS, shadcn/ui, Framer Motion
@@ -112,4 +112,4 @@ Help users run project work in one place:
 - Preserved or improved usability on small screens
 
 ## 12. Optional Prompt For UI/UX AI
-Design a modern, high-clarity productivity UI for a multi-project Kanban + Notes app called KanbanBoard. Keep all existing functionality. Create desktop and mobile layouts with a strong but practical visual identity, clear hierarchy, fast scanning, accessible contrast, and purposeful motion. Include a refined project switcher, improved task cards/dialog, and an efficient notes editing experience with markdown preview. Provide a component system and design tokens that can be implemented in React + Tailwind + shadcn/ui.
+Design a modern, high-clarity productivity UI for a multi-project Kanban + Notes app called LifeFlowPlanner. Keep all existing functionality. Create desktop and mobile layouts with a strong but practical visual identity, clear hierarchy, fast scanning, accessible contrast, and purposeful motion. Include a refined project switcher, improved task cards/dialog, and an efficient notes editing experience with markdown preview. Provide a component system and design tokens that can be implemented in React + Tailwind + shadcn/ui.

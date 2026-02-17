@@ -1,4 +1,4 @@
-# KanbanBoard
+# LifeFlowPlanner
 
 Kanban + Notes tracker built with React, Tailwind CSS, and `shadcn/ui`.
 

@@ -83,8 +83,8 @@ This keeps one shared UI/business logic codebase across desktop and mobile.
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.kanbanboard.mobile",
-  appName: "KanbanBoard",
+  appId: "com.lifeflowplanner.mobile",
+  appName: "LifeFlowPlanner",
   webDir: "dist",
   bundledWebRuntime: false
 };

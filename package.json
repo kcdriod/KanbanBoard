@@ -1,15 +1,18 @@
 {
-  "name": "kanbanboard",
+  "name": "lifeflowplanner",
   "private": true,
   "version": "1.0.0",
   "description": "Multi-project Kanban board and notes workspace desktop app.",
-  "author": "KanbanBoard Team",
+  "author": "LifeFlowPlanner Team",
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:renderer": "vite",
-    "dev:electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "predev:electron": "node scripts/ensure-electron-native.cjs",
+    "dev:electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 node scripts/run-electron.cjs .",
+    "prestart": "node scripts/ensure-electron-native.cjs",
+    "prebuild": "node scripts/ensure-rollup-native.cjs",
     "build": "vite build",
     "build:desktop": "npm run build && electron-builder",
     "build:win": "npm run build && electron-builder --win",
@@ -22,7 +25,7 @@
     "mobile:open:android": "npx cap open android",
     "mobile:open:ios": "npx cap open ios",
     "preview": "vite preview",
-    "start": "electron ."
+    "start": "node scripts/run-electron.cjs ."
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -55,8 +58,8 @@
     "@rollup/rollup-win32-x64-msvc": "^4.57.1"
   },
   "build": {
-    "appId": "com.kanbanboard.desktop",
-    "productName": "KanbanBoard",
+    "appId": "com.lifeflowplanner.desktop",
+    "productName": "LifeFlow Planner",
     "icon": "build/icons/icon-1024.png",
     "directories": {
       "output": "release"

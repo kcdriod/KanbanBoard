@@ -1,7 +1,7 @@
-# KanbanBoard Collaboration and Deployment Strategy
+# LifeFlowPlanner Collaboration and Deployment Strategy
 
 ## 1. Objective
-Convert KanbanBoard from single-user local storage to a secure, multi-user collaborative app with:
+Convert LifeFlowPlanner from single-user local storage to a secure, multi-user collaborative app with:
 - user login
 - workspace sharing and roles
 - real-time updates

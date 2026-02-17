@@ -2,13 +2,17 @@ const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("node:path");
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+const appName = "LifeFlow Planner";
+const desktopIconPath = path.join(__dirname, "..", "build", "icons", "icon-1024.png");
 
 function createMainWindow() {
   const window = new BrowserWindow({
+    title: appName,
     width: 1440,
     height: 920,
     minWidth: 1100,
     minHeight: 720,
+    icon: desktopIconPath,
     show: false,
     backgroundColor: "#0f172a",
     webPreferences: {
@@ -34,6 +38,7 @@ function createMainWindow() {
 }
 
 app.whenReady().then(() => {
+  app.setName(appName);
   createMainWindow();
 
   app.on("activate", () => {
